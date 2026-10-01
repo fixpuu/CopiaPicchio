@@ -14,14 +14,47 @@ const loginError = document.getElementById('login-error');
 const currentUsernameDisplay = document.getElementById('current-username');
 const btnLogout = document.getElementById('btn-logout');
 
-// Navigation Tabs
+// Navigation Tabs & Sections
 const navBtnNuovo = document.getElementById('nav-btn-nuovo');
 const navBtnCompiti = document.getElementById('nav-btn-compiti');
+const navBtnAdmin = document.getElementById('nav-btn-admin');
 const compitiBadge = document.getElementById('compiti-badge');
 const inputSection = document.getElementById('input-section');
 const compitiSection = document.getElementById('compiti-section');
+const adminSection = document.getElementById('admin-section');
 const compitiList = document.getElementById('compiti-list');
 const btnCompitiNuovo = document.getElementById('btn-compiti-nuovo');
+
+// Credits & Banners
+const creditsPill = document.getElementById('credits-pill');
+const userCreditsVal = document.getElementById('user-credits-val');
+const bannerZeroCredits = document.getElementById('banner-zero-credits');
+const btnBannerRecharge = document.getElementById('btn-banner-recharge');
+
+// Modals
+const creditsModal = document.getElementById('credits-modal');
+const btnCloseCreditsModal = document.getElementById('btn-close-credits-modal');
+const btnDismissCredits = document.getElementById('btn-dismiss-credits');
+
+const createUserModal = document.getElementById('create-user-modal');
+const btnCloseCreateUser = document.getElementById('btn-close-create-user');
+const btnCancelCreateUser = document.getElementById('btn-cancel-create-user');
+const createUserForm = document.getElementById('create-user-form');
+const newUserEmail = document.getElementById('new-user-email');
+const newUserPassword = document.getElementById('new-user-password');
+const newUserName = document.getElementById('new-user-username');
+const newUserCredits = document.getElementById('new-user-credits');
+const createUserError = document.getElementById('create-user-error');
+
+// Admin Elements
+const adminStatUsers = document.getElementById('admin-stat-users');
+const adminStatCredits = document.getElementById('admin-stat-credits');
+const adminStatZero = document.getElementById('admin-stat-zero');
+const adminStatAdmins = document.getElementById('admin-stat-admins');
+const adminSearchUsers = document.getElementById('admin-search-users');
+const adminUsersTbody = document.getElementById('admin-users-tbody');
+const btnAdminRefresh = document.getElementById('btn-admin-refresh');
+const btnAdminAddUser = document.getElementById('btn-admin-add-user');
 
 // Form Elements
 const exerciseForm = document.getElementById('exercise-form');
@@ -85,14 +118,14 @@ function apiFetch(url, options = {}) {
   return fetch(url, options);
 }
 
-// ================= AUTHENTICATION =================
+// ================= AUTHENTICATION & CREDITS =================
 
 async function checkAuth() {
   try {
     const res = await apiFetch('/api/auth/me');
     const data = await res.json();
     if (data.authenticated) {
-      setAuthenticatedUser(data.username, data.sessionToken || sessionToken);
+      setAuthenticatedUser(data, data.sessionToken || sessionToken);
     } else {
       showAuthModal();
     }
@@ -101,8 +134,20 @@ async function checkAuth() {
   }
 }
 
-function setAuthenticatedUser(username, token) {
-  currentUser = username;
+function setAuthenticatedUser(userData, token) {
+  let username, email, credits, isAdmin;
+  if (typeof userData === 'object') {
+    username = userData.username;
+    email = userData.email;
+    credits = userData.credits !== undefined ? userData.credits : 1;
+    isAdmin = !!userData.isAdmin;
+  } else {
+    username = userData;
+    credits = 1;
+    isAdmin = (username === 'matty' || username === 'zome');
+  }
+
+  currentUser = { username, email, credits, isAdmin };
   sessionToken = token;
   if (token) localStorage.setItem('cp_session_token', token);
   localStorage.setItem('cp_username', username);
@@ -110,13 +155,42 @@ function setAuthenticatedUser(username, token) {
   currentUsernameDisplay.textContent = username;
   authModal.classList.add('hidden');
 
-  // Load user homeworks
+  updateCreditsUI(credits, isAdmin);
+
+  // Mostra il pulsante admin se l'utente è uno dei 2 amministratori
+  if (isAdmin) {
+    navBtnAdmin.classList.remove('hidden');
+  } else {
+    navBtnAdmin.classList.add('hidden');
+    adminSection.classList.add('hidden');
+  }
+
+  // Carica i compiti dell'utente
   loadCompiti();
+}
+
+function updateCreditsUI(credits, isAdmin) {
+  if (currentUser) {
+    currentUser.credits = credits;
+    currentUser.isAdmin = isAdmin;
+  }
+  const displayVal = isAdmin ? '∞' : (credits !== undefined ? credits : 0);
+  userCreditsVal.textContent = displayVal;
+
+  if (!isAdmin && credits <= 0) {
+    creditsPill.classList.add('zero');
+    bannerZeroCredits?.classList.remove('hidden');
+  } else {
+    creditsPill.classList.remove('zero');
+    bannerZeroCredits?.classList.add('hidden');
+  }
 }
 
 function showAuthModal() {
   currentUser = null;
   authModal.classList.remove('hidden');
+  navBtnAdmin.classList.add('hidden');
+  adminSection.classList.add('hidden');
 }
 
 loginForm.addEventListener('submit', async (e) => {
@@ -135,7 +209,7 @@ loginForm.addEventListener('submit', async (e) => {
 
     const data = await res.json();
     if (res.ok && data.success) {
-      setAuthenticatedUser(data.username, data.sessionToken);
+      setAuthenticatedUser(data, data.sessionToken);
       showToast(`Accesso eseguito come ${data.username}`, 'success');
     } else {
       loginError.textContent = data.error || 'Credenziali non valide.';
@@ -158,6 +232,20 @@ btnLogout.addEventListener('click', async () => {
   showToast('Disconnessione completata', 'success');
 });
 
+// ================= MODAL CREDITI & OWNER =================
+
+function showCreditsModal() {
+  creditsModal.classList.remove('hidden');
+}
+
+function hideCreditsModal() {
+  creditsModal.classList.add('hidden');
+}
+
+creditsPill.addEventListener('click', showCreditsModal);
+btnBannerRecharge?.addEventListener('click', showCreditsModal);
+btnCloseCreditsModal?.addEventListener('click', hideCreditsModal);
+btnDismissCredits?.addEventListener('click', hideCreditsModal);
 
 // ================= NAVIGATION =================
 
@@ -173,21 +261,42 @@ btnCompitiNuovo.addEventListener('click', () => {
   showNuovoCompitoView();
 });
 
+navBtnAdmin.addEventListener('click', () => {
+  showAdminView();
+});
+
 function showNuovoCompitoView() {
   navBtnNuovo.classList.add('active');
   navBtnCompiti.classList.remove('active');
+  navBtnAdmin.classList.remove('active');
   compitiSection.classList.add('hidden');
+  adminSection.classList.add('hidden');
   inputSection.classList.remove('hidden');
 }
 
 function showCompitiView() {
   navBtnCompiti.classList.add('active');
   navBtnNuovo.classList.remove('active');
+  navBtnAdmin.classList.remove('active');
   inputSection.classList.add('hidden');
+  adminSection.classList.add('hidden');
   resultsSection.classList.add('hidden');
   loadingSection.classList.add('hidden');
   compitiSection.classList.remove('hidden');
   loadCompiti();
+}
+
+function showAdminView() {
+  if (!currentUser?.isAdmin) return;
+  navBtnAdmin.classList.add('active');
+  navBtnNuovo.classList.remove('active');
+  navBtnCompiti.classList.remove('active');
+  inputSection.classList.add('hidden');
+  resultsSection.classList.add('hidden');
+  loadingSection.classList.add('hidden');
+  compitiSection.classList.add('hidden');
+  adminSection.classList.remove('hidden');
+  loadAdminUsers();
 }
 
 // ================= I MIEI COMPITI =================
@@ -394,6 +503,13 @@ exerciseForm.addEventListener('submit', async (e) => {
     return;
   }
 
+  // Controllo crediti prima di avviare (se utente normale con 0 crediti)
+  if (!currentUser?.isAdmin && (currentUser?.credits <= 0)) {
+    showCreditsModal();
+    showToast('Crediti esauriti! Contatta l\'owner per acquistare una ricarica.', 'error');
+    return;
+  }
+
   // Show loading stepper
   loadingSection.classList.remove('hidden');
   resultsSection.classList.add('hidden');
@@ -425,7 +541,16 @@ exerciseForm.addEventListener('submit', async (e) => {
 
     const data = await res.json();
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Errore nella generazione del progetto');
+      if (res.status === 403 && (data.error === 'CREDITS_EXHAUSTED' || data.message?.includes('crediti'))) {
+        updateCreditsUI(0, false);
+        showCreditsModal();
+      }
+      throw new Error(data.message || data.error || 'Errore nella generazione del progetto');
+    }
+
+    // Aggiorna crediti se restituiti dal server
+    if (data.remainingCredits !== undefined) {
+      updateCreditsUI(data.remainingCredits, currentUser?.isAdmin);
     }
 
     // Complete all steps
@@ -446,6 +571,9 @@ exerciseForm.addEventListener('submit', async (e) => {
     clearInterval(stepInterval);
     loadingSection.classList.add('hidden');
     btnGenerate.disabled = false;
+    if (err.message && err.message.toLowerCase().includes('crediti')) {
+      showCreditsModal();
+    }
     showToast(err.message, 'error');
   }
 });
@@ -657,6 +785,239 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// ================= ADMIN DASHBOARD LOGIC =================
+
+let adminUsersList = [];
+
+async function loadAdminUsers() {
+  if (!currentUser?.isAdmin) return;
+  try {
+    const res = await apiFetch('/api/admin/users');
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Impossibile caricare gli utenti.');
+    }
+
+    adminUsersList = data.users || [];
+    updateAdminStats(adminUsersList);
+    renderAdminUsersTable(adminUsersList);
+  } catch (err) {
+    showToast(`Errore admin: ${err.message}`, 'error');
+  }
+}
+
+function updateAdminStats(users) {
+  const total = users.length;
+  const totalCredits = users.reduce((acc, u) => acc + (u.credits || 0), 0);
+  const zeroCount = users.filter(u => !u.isAdmin && (u.credits || 0) <= 0).length;
+  const adminCount = users.filter(u => u.isAdmin).length;
+
+  if (adminStatUsers) adminStatUsers.textContent = total;
+  if (adminStatCredits) adminStatCredits.textContent = totalCredits;
+  if (adminStatZero) adminStatZero.textContent = zeroCount;
+  if (adminStatAdmins) adminStatAdmins.textContent = adminCount;
+}
+
+function renderAdminUsersTable(users) {
+  if (!adminUsersTbody) return;
+
+  if (users.length === 0) {
+    adminUsersTbody.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-dim);">
+          Nessun utente trovato corrispondente alla ricerca.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  adminUsersTbody.innerHTML = users.map(u => {
+    const isCurrentAdmin = u.isAdmin;
+    const cred = u.credits !== undefined ? u.credits : 1;
+    const credClass = cred > 0 ? 'positive' : 'zero';
+    const roleBadge = isCurrentAdmin
+      ? '<span class="role-badge admin">👑 Admin</span>'
+      : '<span class="role-badge user">👤 Utente</span>';
+
+    const dateStr = u.createdAt ? new Date(u.createdAt).toLocaleDateString('it-IT', {
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    }) : '-';
+
+    return `
+      <tr data-user-id="${u.id}">
+        <td>
+          <div class="user-cell">
+            <span class="user-email">${escapeHtml(u.email)}</span>
+            <span class="user-sub">@${escapeHtml(u.username || u.email.split('@')[0])}</span>
+          </div>
+        </td>
+        <td>${roleBadge}</td>
+        <td>
+          <span class="credit-badge ${credClass}">⚡ ${isCurrentAdmin ? '∞ (' + cred + ')' : cred}</span>
+        </td>
+        <td><span style="color: var(--text-muted); font-size: 0.82rem;">${dateStr}</span></td>
+        <td>
+          <div class="btn-action-group">
+            <button type="button" class="btn-credit-plus" onclick="handleCreditChange('${u.id}', 1)" title="Aggiungi 1 credito">+1</button>
+            <button type="button" class="btn-credit-plus" onclick="handleCreditChange('${u.id}', 5)" title="Aggiungi 5 crediti">+5</button>
+            <button type="button" class="btn-credit-minus" onclick="handleCreditChange('${u.id}', -1)" title="Togli 1 credito">-1</button>
+            <button type="button" class="btn-credit-set" onclick="handleCreditPrompt('${u.id}', ${cred}, '${escapeHtml(u.email)}')" title="Imposta numero esatto">✏️</button>
+          </div>
+        </td>
+        <td>
+          ${!isCurrentAdmin ? `
+            <button type="button" class="btn-delete-user" onclick="handleDeleteUser('${u.id}', '${escapeHtml(u.email)}')" title="Elimina utente">
+              🗑️
+            </button>
+          ` : '<span style="color: var(--text-dim); font-size: 0.75rem;">Protetto</span>'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Handler cambio crediti (+1, +5, -1)
+window.handleCreditChange = async function(userId, delta) {
+  try {
+    const res = await apiFetch(`/api/admin/users/${userId}/credits`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delta })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Errore modifica crediti');
+    }
+    showToast(`Crediti aggiornati (${delta > 0 ? '+' + delta : delta})`, 'success');
+    loadAdminUsers();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+// Handler impostazione crediti personalizzati
+window.handleCreditPrompt = async function(userId, currentVal, email) {
+  const input = prompt(`Inserisci il numero esatto di crediti per l'utente ${email}:`, currentVal);
+  if (input === null) return;
+  const num = parseInt(input, 10);
+  if (isNaN(num) || num < 0) {
+    showToast('Inserisci un numero valido di crediti (maggiore o uguale a 0)', 'error');
+    return;
+  }
+
+  try {
+    const res = await apiFetch(`/api/admin/users/${userId}/credits`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credits: num })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Errore aggiornamento crediti');
+    }
+    showToast(`Crediti impostati a ${num}`, 'success');
+    loadAdminUsers();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+// Handler eliminazione utente
+window.handleDeleteUser = async function(userId, email) {
+  if (!confirm(`Sei sicuro di voler eliminare l'utente ${email} da Supabase? L'azione è irreversibile.`)) {
+    return;
+  }
+  try {
+    const res = await apiFetch(`/api/admin/users/${userId}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Errore durante l\'eliminazione');
+    }
+    showToast(`Utente ${email} eliminato con successo`, 'success');
+    loadAdminUsers();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+// Ricerca e filtro utenti live
+if (adminSearchUsers) {
+  adminSearchUsers.addEventListener('input', (e) => {
+    const q = e.target.value.toLowerCase().trim();
+    if (!q) {
+      renderAdminUsersTable(adminUsersList);
+      return;
+    }
+    const filtered = adminUsersList.filter(u =>
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.username && u.username.toLowerCase().includes(q))
+    );
+    renderAdminUsersTable(filtered);
+  });
+}
+
+// Bottone ricarica admin
+if (btnAdminRefresh) {
+  btnAdminRefresh.addEventListener('click', () => {
+    loadAdminUsers();
+    showToast('Dati admin aggiornati', 'info');
+  });
+}
+
+// Modal creazione utente da Admin
+if (btnAdminAddUser) {
+  btnAdminAddUser.addEventListener('click', () => {
+    createUserError?.classList.add('hidden');
+    createUserForm?.reset();
+    if (newUserCredits) newUserCredits.value = '1';
+    createUserModal?.classList.remove('hidden');
+  });
+}
+
+btnCloseCreateUser?.addEventListener('click', () => {
+  createUserModal?.classList.add('hidden');
+});
+
+btnCancelCreateUser?.addEventListener('click', () => {
+  createUserModal?.classList.add('hidden');
+});
+
+if (createUserForm) {
+  createUserForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    createUserError?.classList.add('hidden');
+
+    const email = newUserEmail.value.trim();
+    const password = newUserPassword.value;
+    const username = newUserName.value.trim();
+    const credits = parseInt(newUserCredits.value, 10) || 1;
+
+    try {
+      const res = await apiFetch('/api/admin/users/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, username, credits })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Impossibile creare l\'utente');
+      }
+
+      createUserModal?.classList.add('hidden');
+      showToast(`Utente ${email} creato con ${credits} credito/i!`, 'success');
+      loadAdminUsers();
+    } catch (err) {
+      if (createUserError) {
+        createUserError.textContent = err.message;
+        createUserError.classList.remove('hidden');
+      }
+    }
+  });
 }
 
 // Start Auth check

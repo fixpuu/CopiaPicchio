@@ -86,6 +86,21 @@ function sanitizeProjectOutput(projectData, autore = 'Nome e Cognome') {
   };
 }
 
+// Middleware di autorizzazione admin (accessibile solo ai 2 account: matty, zome)
+function requireAdmin(req, res, next) {
+  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session;
+  if (token && activeSessions.has(token)) {
+    const session = activeSessions.get(token);
+    if (supabaseModule.isUserAdmin(session)) {
+      req.user = session;
+      req.sessionToken = token;
+      return next();
+    }
+    return res.status(403).json({ error: 'Accesso negato. Solo gli account amministratori autorizzati (matty, zome) possono accedere a questa sezione.' });
+  }
+  return res.status(401).json({ error: 'Non autorizzato. Effettua il login come amministratore.' });
+}
+
 // ================= API AUTENTICAZIONE =================
 
 app.post('/api/auth/login', async (req, res) => {
@@ -97,17 +112,18 @@ app.post('/api/auth/login', async (req, res) => {
 
   const cleanUser = username.trim();
 
-  // 1. Se Supabase è configurato, usa Supabase Auth (solo login)
+  // 1. Se Supabase è configurato, usa Supabase Auth
   if (supabaseModule.isConfigured()) {
     try {
-      const { user, session } = await supabaseModule.loginWithSupabase(cleanUser, password);
+      const { user, session, credits, isAdmin } = await supabaseModule.loginWithSupabase(cleanUser, password);
       const sessionToken = session?.access_token || crypto.randomBytes(32).toString('hex');
-      const userIdentifier = user.email.split('@')[0];
+      const userIdentifier = user.user_metadata?.username || user.email.split('@')[0];
 
       activeSessions.set(sessionToken, {
         username: userIdentifier,
         email: user.email,
         userId: user.id,
+        isAdmin,
         loginTime: Date.now()
       });
       compitiManager.persistSessions(activeSessions);
@@ -119,20 +135,34 @@ app.post('/api/auth/login', async (req, res) => {
         maxAge: 30 * 24 * 60 * 60 * 1000 // 30 giorni
       });
 
-      return res.json({ success: true, username: userIdentifier, email: user.email, sessionToken });
+      return res.json({
+        success: true,
+        username: userIdentifier,
+        email: user.email,
+        credits,
+        isAdmin,
+        sessionToken
+      });
     } catch (sbErr) {
       console.warn('[Supabase Auth Error]:', sbErr.message);
-      return res.status(401).json({ error: `Login Supabase fallito: ${sbErr.message}` });
+      return res.status(401).json({ error: `Login fallito: ${sbErr.message}` });
     }
   }
 
-  // 2. Fallback locale se SUPABASE_URL non è ancora stato impostato
+  // 2. Fallback locale se SUPABASE_URL non è impostato
   const userLower = cleanUser.toLowerCase();
   const expectedPassword = USERS[userLower];
 
   if (expectedPassword && expectedPassword === password) {
     const sessionToken = crypto.randomBytes(32).toString('hex');
-    activeSessions.set(sessionToken, { username: userLower, loginTime: Date.now() });
+    const isAdmin = supabaseModule.isUserAdmin({ username: userLower });
+    const { credits } = await supabaseModule.getUserCredits({ username: userLower });
+
+    activeSessions.set(sessionToken, {
+      username: userLower,
+      isAdmin,
+      loginTime: Date.now()
+    });
     compitiManager.persistSessions(activeSessions);
 
     res.cookie('cp_session', sessionToken, {
@@ -145,8 +175,10 @@ app.post('/api/auth/login', async (req, res) => {
     return res.json({
       success: true,
       username: userLower,
+      credits,
+      isAdmin,
       sessionToken,
-      note: 'Accesso locale (per attivare Supabase imposta SUPABASE_URL su Vercel o config.json).'
+      note: 'Accesso locale (imposta SUPABASE_URL su Vercel o config.json per il cloud).'
     });
   }
 
@@ -163,18 +195,27 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/api/auth/me', (req, res) => {
+app.get('/api/auth/me', async (req, res) => {
   const token = req.headers['x-session-token'] || req.signedCookies?.cp_session;
   if (token && activeSessions.has(token)) {
     const session = activeSessions.get(token);
+    const { credits, isAdmin } = await supabaseModule.getUserCredits(session);
     return res.json({
       authenticated: true,
       username: session.username,
       email: session.email,
+      credits,
+      isAdmin,
       sessionToken: token
     });
   }
   return res.json({ authenticated: false });
+});
+
+// Recupero crediti utente
+app.get('/api/user/credits', requireAuth, async (req, res) => {
+  const info = await supabaseModule.getUserCredits(req.user);
+  res.json({ success: true, ...info });
 });
 
 // ================= API I MIEI COMPITI =================
@@ -217,6 +258,60 @@ app.delete('/api/compiti/:id', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// ================= API ADMIN DASHBOARD =================
+// Accessibile rigorosamente solo ai 2 account amministratori (matty, zome)
+
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  try {
+    const users = await supabaseModule.listAllUsers();
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ error: `Errore caricamento lista utenti: ${err.message}` });
+  }
+});
+
+app.post('/api/admin/users/:id/credits', requireAdmin, async (req, res) => {
+  try {
+    const { delta, credits } = req.body;
+    const userId = req.params.id;
+
+    let result;
+    if (delta !== undefined) {
+      result = await supabaseModule.adjustUserCredits(userId, parseInt(delta, 10));
+    } else if (credits !== undefined) {
+      result = await supabaseModule.updateUserCredits(userId, parseInt(credits, 10));
+    } else {
+      return res.status(400).json({ error: 'Specifica delta (+1/-1) oppure un valore esatto di crediti.' });
+    }
+
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(500).json({ error: `Errore aggiornamento crediti: ${err.message}` });
+  }
+});
+
+app.post('/api/admin/users/create', requireAdmin, async (req, res) => {
+  try {
+    const { email, password, username, credits } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email e password sono obbligatori.' });
+    }
+    const user = await supabaseModule.createNewUser({ email, password, username, credits });
+    res.json({ success: true, user });
+  } catch (err) {
+    res.status(500).json({ error: `Errore creazione utente: ${err.message}` });
+  }
+});
+
+app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
+  try {
+    await supabaseModule.deleteUser(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: `Errore eliminazione utente: ${err.message}` });
+  }
+});
+
 // ================= API GENERAZIONE ESERCIZIO =================
 
 app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) => {
@@ -228,7 +323,16 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
       return res.status(400).json({ error: 'Fornisci il testo della consegna o allega una foto della consegna.' });
     }
 
-    console.log(`[CopiaPicchio!] Nuova richiesta di generazione da utente: ${req.user.username}`);
+    // 1. Verifica disponibilità crediti (1 credito = 1 generazione)
+    const userCreditInfo = await supabaseModule.getUserCredits(req.user);
+    if (!userCreditInfo.isAdmin && userCreditInfo.credits <= 0) {
+      return res.status(403).json({
+        error: 'CREDITS_EXHAUSTED',
+        message: 'Hai esaurito i crediti disponibili per generare compiti. Contatta l\'owner per acquistare una ricarica.'
+      });
+    }
+
+    console.log(`[CopiaPicchio!] Nuova richiesta di generazione da utente: ${req.user.username} (Crediti: ${userCreditInfo.credits})`);
 
     let rawProject;
     try {
@@ -247,10 +351,10 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
       return res.status(502).json({ error: `Errore durante la chiamata a Gemini: ${apiErr.message}` });
     }
 
-    // 1. Sanitizzazione Diemoz e applicazione formattazione a tabulazioni
+    // 2. Sanitizzazione Diemoz e applicazione formattazione a tabulazioni
     let project = sanitizeProjectOutput(rawProject, autore || 'Nome e Cognome');
 
-    // 2. Verifica compilazione (in locale con g++ o serverless con validatore)
+    // 3. Verifica compilazione (in locale con g++ o serverless con validatore)
     console.log('[CopiaPicchio!] Verifica compilazione C++...');
     let testResult = await testProjectCompilation(project);
 
@@ -287,7 +391,7 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
     });
     project = sanitizeProjectOutput(project, autore || 'Nome e Cognome');
 
-    // 3. Salva progetto in memoria, su file e su Supabase
+    // 4. Salva progetto in memoria, su file e su Supabase
     const projectId = crypto.randomUUID();
     const finalData = {
       id: projectId,
@@ -308,11 +412,20 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
     // Salva asincrono su Supabase
     supabaseModule.saveCompitoSupabase(finalData).catch(() => {});
 
+    // 5. Consuma 1 credito se utente non amministratore
+    let remainingCredits = userCreditInfo.credits;
+    try {
+      remainingCredits = await supabaseModule.consumeCredit(req.user);
+    } catch (cErr) {
+      console.warn('[Credits] Avviso decremento crediti:', cErr.message);
+    }
+
     return res.json({
       success: true,
       projectId,
       project,
-      testResult
+      testResult,
+      remainingCredits
     });
   } catch (err) {
     console.error('[CopiaPicchio!] Errore server non gestito:', err);

@@ -1,6 +1,6 @@
 # 🦜 CopiaPicchio!
 
-> Generatore didattico intelligente di compiti e progetti di informatica C++ basato su **Gemini 3.1 Flash Lite**, integrato con **Supabase**, predisposto per deploy **Serverless su Vercel** e rigorosamente conforme alla mappa didattica della classe 3B IT (senza costrutti avanzati o STL non previsti).
+> Generatore didattico intelligente di compiti e progetti di informatica C++ basato su **Gemini 3.1 Flash Lite**, integrato con **Supabase**, predisposto per deploy **Serverless su Vercel** e rigorosamente conforme alla mappa didattica della classe 3B IT (senza costrutti avanzati o STL non previsti). Include **Admin Dashboard** riservata e **Sistema a Crediti** per gli utenti.
 
 ---
 
@@ -27,21 +27,43 @@
   - `INSTALL.md` (istruzioni operative standard)
   - `README.md` (relazione con stile purple `:not(pre) > code` e metadati)
   - `COPYING` & `gpl-3.0.txt` (licenza didattica GNU GPL v3)
+- ⚡ **Sistema a Crediti (1 Credito = 1 Generazione)**:
+  - I nuovi utenti registrati iniziano automaticamente con **1 credito gratuito**.
+  - Ogni generazione di esercizio andata a buon fine scala **1 credito**.
+  - Al termine dei crediti (0 crediti), appare la **schermata di blocco** che invita a contattare l'Owner per ricaricare.
+- 🛡️ **Admin Dashboard (Riservata a 2 Account)**:
+  - Accessibile unicamente dai due account designati: `matty` e `zome`.
+  - Visualizzazione in tempo reale di tutti gli utenti registrati su Supabase.
+  - Assegnazione rapida crediti (`+1`, `+5`, `-1`, impostazione valore esatto).
+  - Creazione diretta di nuovi account con crediti iniziali personalizzati.
+  - Eliminazione account utente (con protezione per gli account admin).
 - 🗂️ **Sezione "I Miei Compiti"**:
   - Storico compiti generati con ricerca immediata, riapertura in visualizzatore, anteprima e download zip.
   - Login automatico memorizzato nel browser.
 - 🔒 **Autenticazione con Supabase**:
-  - Autenticazione diretta via Supabase Auth: l'amministratore crea gli utenti direttamente nella dashboard di Supabase.
+  - Autenticazione diretta via Supabase Auth senza form di auto-registrazione pubblica.
 
 ---
 
-## 🔑 Autenticazione (Supabase)
+## 🔑 Autenticazione e Account Admin
 
-L'applicazione utilizza **Supabase Auth** come provider di autenticazione:
-- Non è presente la registrazione pubblica: le credenziali vengono create dal proprietario direttamente dal pannello **Supabase Dashboard** (`Authentication -> Users`).
-- In locale o in assenza di URL Supabase configurato, è attivo il fallback sicuro con le credenziali predefinite:
-  - `matty` / `Triathlon01`
-  - `zome` / `zome01`
+L'accesso è gestito tramite **Supabase Auth**:
+- Solo login: i nuovi studenti vengono creati dall'amministratore (dalla dashboard Supabase o direttamente dall'apposita modale nella Admin Dashboard).
+- I due account amministratori abilitati sono:
+
+| Nome Utente | Email Supabase | Ruolo |
+|---|---|---|
+| `matty` | `matty@copiapicchio.it` | 👑 Amministratore (Crediti Illimitati) |
+| `zome` | `zome@copiapicchio.it` | 👑 Amministratore (Crediti Illimitati) |
+
+---
+
+## ⚡ Regole del Sistema Crediti
+
+1. **Credito iniziale**: Ogni nuovo utente creato parte con **1 credito**.
+2. **Consumo**: **1 credito = 1 generazione completa** (codice modulare C++ 3B, zero warning, makefile e relazione passo per passo).
+3. **Crediti esauriti**: Se un utente raggiunge **0 crediti**, la generazione viene inibita e compare la modale per **contattare l'Owner** (via Telegram, WhatsApp o di persona) per acquistare una ricarica.
+4. **Pannello Admin**: Gli amministratori possono aumentare, diminuire o impostare i crediti di qualsiasi utente in qualsiasi momento.
 
 ---
 
@@ -57,8 +79,8 @@ Nel pannello **Vercel -> Settings -> Environment Variables**, imposta:
 | Variabile | Descrizione |
 |---|---|
 | `GEMINI_API_KEY` | Chiave API di Gemini (`AQ.Ab...`) |
-| `SUPABASE_URL` | URL del tuo progetto Supabase (`https://<project-ref>.supabase.co`) |
-| `SUPABASE_KEY` | Secret Key di Supabase (`sb_secret_...`) |
+| `SUPABASE_URL` | `https://zeyffbpgthektssiqlmt.supabase.co` |
+| `SUPABASE_KEY` | La tua Secret Key di Supabase (`sb_secret_...`) |
 
 ---
 
@@ -96,16 +118,16 @@ Il server sarà accessibile su:
 ```
 ├── api/
 │   └── index.js           # Serverless Express handler per Vercel
-├── server.js              # Server Express, routing API e gestione sessioni
-├── supabase.js            # Client Supabase (Auth e Database)
-├── gemini.js              # Motore AI Gemini 3.1 Flash Lite e prompt didattico
+├── server.js              # Server Express, routing API, auth e gestione crediti
+├── supabase.js            # Client Supabase Admin, gestione crediti e permessi
+├── gemini.js              # Motore AI Gemini 3.1 Flash Lite e prompt didattico 3B
 ├── compiler.js            # Wrapper g++ -Wall -Wconversion e validatore serverless
 ├── vercel.json            # Configurazione deploy serverless su Vercel
 ├── package.json           # Dipendenze e script npm
 ├── public/                # Frontend Web Application (Single Page Application responsive)
-│   ├── index.html         # Interfaccia utente mobile-friendly
-│   ├── style.css          # Design moderno scuro, styling tab e stampa
-│   └── app.js             # Logica frontend (upload, auth, visualizzatore compiti)
+│   ├── index.html         # Interfaccia con Admin Dashboard, contatta owner e crediti
+│   ├── style.css          # Design moderno scuro, styling admin, pill crediti e print
+│   └── app.js             # Logica frontend (upload, crediti, admin table, tabs)
 ├── resources/
 │   ├── skel/              # Template di licenza (COPYING, gpl-3.0.txt)
 │   └── templates/         # Template didattici della skill

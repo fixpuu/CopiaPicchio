@@ -70,9 +70,16 @@
           <span>📚 I Miei Compiti</span>
           <span class="nav-badge" id="compiti-badge">0</span>
         </button>
+        <button class="nav-tab nav-tab-admin hidden" id="nav-btn-admin">
+          <span>🛡️ Admin Dashboard</span>
+        </button>
       </nav>
 
       <div class="header-status">
+        <div class="credits-pill" id="credits-pill" title="Crediti disponibili (1 credito = 1 generazione). Clicca per info o ricarica">
+          <span class="credits-icon">⚡</span>
+          <span class="credits-text"><span id="user-credits-val">1</span> Crediti</span>
+        </div>
         <div class="ai-status-pill">
           <span class="status-dot"></span>
           <span class="status-label">Gemini 3.1 Flash Lite</span>
@@ -88,6 +95,80 @@
 
   <!-- ================= MAIN APP CONTAINER ================= -->
   <main class="container main-content">
+
+    <!-- SEZIONE ADMIN DASHBOARD (SOLO ACCOUNT AMMINISTRATORI: matty, zome) -->
+    <section class="card admin-card hidden" id="admin-section">
+      <div class="card-header flex-header">
+        <div class="section-title">
+          <h2>🛡️ Admin Dashboard (Riservata)</h2>
+          <p>Gestione utenti Supabase, assegnazione e revoca crediti in tempo reale.</p>
+        </div>
+        <div class="header-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-admin-refresh">
+            <span>🔄 Ricarica</span>
+          </button>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-admin-add-user">
+            <span>➕ Nuovo Utente</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Statistiche veloci admin -->
+      <div class="admin-stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">👥</div>
+          <div class="stat-data">
+            <div class="stat-val" id="admin-stat-users">0</div>
+            <div class="stat-lbl">Utenti Totali</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⚡</div>
+          <div class="stat-data">
+            <div class="stat-val" id="admin-stat-credits">0</div>
+            <div class="stat-lbl">Crediti Assegnati</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⚠️</div>
+          <div class="stat-data">
+            <div class="stat-val" id="admin-stat-zero">0</div>
+            <div class="stat-lbl">Utenti a 0 Crediti</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">👑</div>
+          <div class="stat-data">
+            <div class="stat-val" id="admin-stat-admins">2</div>
+            <div class="stat-lbl">Admin (matty, zome)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filtro ricerca -->
+      <div class="admin-filter-bar">
+        <input type="text" id="admin-search-users" placeholder="🔍 Cerca utente per email o username...">
+      </div>
+
+      <!-- Tabella utenti -->
+      <div class="admin-table-container">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Utente / Email</th>
+              <th>Ruolo</th>
+              <th>Crediti</th>
+              <th>Registrato il</th>
+              <th>Modifica Crediti</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody id="admin-users-tbody">
+            <!-- Popolato dinamicamente da app.js -->
+          </tbody>
+        </table>
+      </div>
+    </section>
 
     <!-- SEZIONE "I MIEI COMPITI" (ARCHIVIO PERSONALE) -->
     <section class="card compiti-card hidden" id="compiti-section">
@@ -113,6 +194,15 @@
           <h2>Consegna dell'Esercizio</h2>
           <p>Scatta o carica la foto del compito, oppure incolla il testo.</p>
         </div>
+      </div>
+
+      <!-- Banner avviso crediti esauriti -->
+      <div id="banner-zero-credits" class="alert-box alert-warning-box hidden">
+        <div class="alert-content">
+          <span class="alert-icon">⚠️</span>
+          <span><strong>Crediti esauriti!</strong> Hai 0 crediti disponibili (1 credito = 1 generazione). Per poter svolgere compiti, ricarica il tuo account.</span>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-banner-recharge">Ricarica Crediti</button>
       </div>
 
       <form id="exercise-form">
@@ -370,6 +460,81 @@
       <p><strong>CopiaPicchio!</strong></p>
     </div>
   </footer>
+
+  <!-- ================= MODAL CREDITI ESAURITI & CONTATTA OWNER ================= -->
+  <div id="credits-modal" class="modal-overlay hidden">
+    <div class="modal-card credits-modal-card">
+      <button class="modal-close-btn" id="btn-close-credits-modal" type="button">✕</button>
+      <div class="modal-header text-center">
+        <div class="logo-badge warning-pulse">⚡</div>
+        <h2 id="credits-modal-title">Crediti Esauriti!</h2>
+        <p id="credits-modal-desc">Hai utilizzato tutti i crediti a disposizione per la risoluzione dei compiti.</p>
+      </div>
+      <div class="credits-info-box">
+        <div class="credits-rate">
+          <span class="rate-icon">💡</span>
+          <span><strong>1 Credito = 1 Risoluzione Completa</strong><br>Include: codice modulare C++ C3B, zero warning con <code>-Wall -Wconversion</code>, makefile e relazione passo per passo.</span>
+        </div>
+        <p class="credits-instructions">
+          Per acquistare ulteriori crediti o ricaricare il tuo account, contatta direttamente l'<strong>Owner / Amministratore</strong> di CopiaPicchio!:
+        </p>
+        <div class="owner-contact-cards">
+          <div class="contact-card">
+            <span class="contact-icon">💬</span>
+            <div class="contact-details">
+              <strong>Telegram</strong>
+              <span>Scrivi all'owner per ricevere una ricarica immediata di crediti.</span>
+            </div>
+          </div>
+          <div class="contact-card">
+            <span class="contact-icon">📱</span>
+            <div class="contact-details">
+              <strong>WhatsApp / Di persona</strong>
+              <span>Comunica il tuo username o email per farti aggiungere nuove generazioni.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions mt-3">
+        <button type="button" class="btn btn-primary btn-block" id="btn-dismiss-credits">Ho capito</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL CREAZIONE UTENTE (ADMIN) ================= -->
+  <div id="create-user-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <button class="modal-close-btn" id="btn-close-create-user" type="button">✕</button>
+      <div class="modal-header">
+        <div class="logo-badge">➕</div>
+        <h2>Crea Nuovo Utente</h2>
+        <p>Aggiungi un account su Supabase con crediti iniziali.</p>
+      </div>
+      <form id="create-user-form">
+        <div class="form-group">
+          <label for="new-user-email">Email Utente *</label>
+          <input type="email" id="new-user-email" placeholder="studente@scuola.it" required autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="new-user-password">Password Temporanea *</label>
+          <input type="password" id="new-user-password" placeholder="Almeno 6 caratteri" required minlength="6" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label for="new-user-username">Nome Utente (opzionale)</label>
+          <input type="text" id="new-user-username" placeholder="Es. mario_rossi">
+        </div>
+        <div class="form-group">
+          <label for="new-user-credits">Crediti Iniziali (Default: 1)</label>
+          <input type="number" id="new-user-credits" value="1" min="0" max="999">
+        </div>
+        <div id="create-user-error" class="alert-error hidden"></div>
+        <div class="modal-actions-row mt-3">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-create-user">Annulla</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-create-user">Crea Utente</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- Notification Toast -->
   <div id="toast" class="toast hidden"></div>
