@@ -13,8 +13,6 @@ const loginPasswordInput = document.getElementById('login-password');
 const loginError = document.getElementById('login-error');
 const currentUsernameDisplay = document.getElementById('current-username');
 const btnLogout = document.getElementById('btn-logout');
-const btnQuickMatty = document.getElementById('btn-quick-matty');
-const btnQuickZome = document.getElementById('btn-quick-zome');
 
 // Navigation Tabs
 const navBtnNuovo = document.getElementById('nav-btn-nuovo');
@@ -160,18 +158,6 @@ btnLogout.addEventListener('click', async () => {
   showToast('Disconnessione completata', 'success');
 });
 
-// Quick Access Buttons
-btnQuickMatty.addEventListener('click', () => {
-  loginUsernameInput.value = 'matty';
-  loginPasswordInput.value = 'Triathlon01';
-  loginForm.requestSubmit();
-});
-
-btnQuickZome.addEventListener('click', () => {
-  loginUsernameInput.value = 'zome';
-  loginPasswordInput.value = 'zome01';
-  loginForm.requestSubmit();
-});
 
 // ================= NAVIGATION =================
 

@@ -7,14 +7,15 @@ const { ZipArchive } = require('archiver');
 const crypto = require('crypto');
 
 const { generateExercise, fixExerciseCode, formatComprehensiveReadme } = require('./gemini');
-const { testProjectCompilation, ensureMakefileTabs } = require('./compiler');
+const { testProjectCompilation, ensureMakefileTabs, formatCppWithTabs } = require('./compiler');
 const compitiManager = require('./data/compitiManager');
+const supabaseModule = require('./supabase');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const COOKIE_SECRET = 'copiapicchio-secret-key-2026';
 
-// Credenziali autorizzate richieste dall'utente
+// Credenziali locali autorizzate (fallback prima di configurare SUPABASE_URL)
 const USERS = {
   'matty': 'Triathlon01',
   'zome': 'zome01'
@@ -46,7 +47,7 @@ function requireAuth(req, res, next) {
   return res.status(401).json({ error: 'Non autorizzato. Effettua il login su CopiaPicchio!' });
 }
 
-// Sanitizzatore: Rimuove qualsiasi riferimento a Diemoz e inserisce "Nome e Cognome" o autore scelto
+// Sanitizzatore: Rimuove qualsiasi riferimento a Diemoz, imposta tabulazioni C++ e autore
 function sanitizeProjectOutput(projectData, autore = 'Nome e Cognome') {
   const targetAuthor = (autore && autore.trim()) ? autore.trim() : 'Nome e Cognome';
 
@@ -76,9 +77,9 @@ function sanitizeProjectOutput(projectData, autore = 'Nome e Cognome') {
     titolo: clean(projectData.titolo),
     argomenti: clean(projectData.argomenti),
     consegna_trascritta: clean(projectData.consegna_trascritta),
-    main_cpp: clean(projectData.main_cpp),
-    function_h: clean(projectData.function_h),
-    function_cpp: clean(projectData.function_cpp),
+    main_cpp: formatCppWithTabs(clean(projectData.main_cpp)),
+    function_h: formatCppWithTabs(clean(projectData.function_h)),
+    function_cpp: formatCppWithTabs(clean(projectData.function_cpp)),
     makefile: ensureMakefileTabs(clean(projectData.makefile || '')),
     install_md: clean(projectData.install_md),
     readme_md: clean(projectData.readme_md)
@@ -87,32 +88,69 @@ function sanitizeProjectOutput(projectData, autore = 'Nome e Cognome') {
 
 // ================= API AUTENTICAZIONE =================
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   
   if (!username || !password) {
-    return res.status(400).json({ error: 'Inserisci username e password.' });
+    return res.status(400).json({ error: 'Inserisci email o username e password.' });
   }
 
-  const cleanUser = username.trim().toLowerCase();
-  const expectedPassword = USERS[cleanUser];
+  const cleanUser = username.trim();
+
+  // 1. Se Supabase è configurato, usa Supabase Auth (solo login)
+  if (supabaseModule.isConfigured()) {
+    try {
+      const { user, session } = await supabaseModule.loginWithSupabase(cleanUser, password);
+      const sessionToken = session?.access_token || crypto.randomBytes(32).toString('hex');
+      const userIdentifier = user.email.split('@')[0];
+
+      activeSessions.set(sessionToken, {
+        username: userIdentifier,
+        email: user.email,
+        userId: user.id,
+        loginTime: Date.now()
+      });
+      compitiManager.persistSessions(activeSessions);
+
+      res.cookie('cp_session', sessionToken, {
+        signed: true,
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 giorni
+      });
+
+      return res.json({ success: true, username: userIdentifier, email: user.email, sessionToken });
+    } catch (sbErr) {
+      console.warn('[Supabase Auth Error]:', sbErr.message);
+      return res.status(401).json({ error: `Login Supabase fallito: ${sbErr.message}` });
+    }
+  }
+
+  // 2. Fallback locale se SUPABASE_URL non è ancora stato impostato
+  const userLower = cleanUser.toLowerCase();
+  const expectedPassword = USERS[userLower];
 
   if (expectedPassword && expectedPassword === password) {
     const sessionToken = crypto.randomBytes(32).toString('hex');
-    activeSessions.set(sessionToken, { username: cleanUser, loginTime: Date.now() });
+    activeSessions.set(sessionToken, { username: userLower, loginTime: Date.now() });
     compitiManager.persistSessions(activeSessions);
 
     res.cookie('cp_session', sessionToken, {
       signed: true,
       httpOnly: true,
       sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 giorni
+      maxAge: 30 * 24 * 60 * 60 * 1000
     });
 
-    return res.json({ success: true, username: cleanUser, sessionToken });
+    return res.json({
+      success: true,
+      username: userLower,
+      sessionToken,
+      note: 'Accesso locale (per attivare Supabase imposta SUPABASE_URL su Vercel o config.json).'
+    });
   }
 
-  return res.status(401).json({ error: 'Username o password errati. Riprova.' });
+  return res.status(401).json({ error: 'Credenziali non valide.' });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -129,14 +167,36 @@ app.get('/api/auth/me', (req, res) => {
   const token = req.headers['x-session-token'] || req.signedCookies?.cp_session;
   if (token && activeSessions.has(token)) {
     const session = activeSessions.get(token);
-    return res.json({ authenticated: true, username: session.username, sessionToken: token });
+    return res.json({
+      authenticated: true,
+      username: session.username,
+      email: session.email,
+      sessionToken: token
+    });
   }
   return res.json({ authenticated: false });
 });
 
 // ================= API I MIEI COMPITI =================
 
-app.get('/api/compiti', requireAuth, (req, res) => {
+app.get('/api/compiti', requireAuth, async (req, res) => {
+  // Prova da Supabase se configurato
+  const cloudList = await supabaseModule.getCompitiSupabase(req.user.username);
+  if (cloudList && cloudList.length > 0) {
+    const formatted = cloudList.map(c => ({
+      id: c.id,
+      user: c.user_email?.split('@')[0] || req.user.username,
+      createdAt: c.created_at,
+      formattedDate: c.formatted_date,
+      nome_progetto: c.nome_progetto,
+      titolo: c.titolo,
+      consegna_preview: (c.consegna || '').slice(0, 120) + '...',
+      testSuccess: c.test_result?.success ?? true
+    }));
+    return res.json({ success: true, compiti: formatted });
+  }
+
+  // Altrimenti archivio locale / persistente
   const list = compitiManager.getCompitiByUser(req.user.username);
   res.json({ success: true, compiti: list });
 });
@@ -187,11 +247,11 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
       return res.status(502).json({ error: `Errore durante la chiamata a Gemini: ${apiErr.message}` });
     }
 
-    // 1. Sanitizzazione Diemoz -> "Nome e Cognome" o autore scelto
+    // 1. Sanitizzazione Diemoz e applicazione formattazione a tabulazioni
     let project = sanitizeProjectOutput(rawProject, autore || 'Nome e Cognome');
 
-    // 2. Verifica compilazione con g++ -Wall -Wconversion
-    console.log('[CopiaPicchio!] Verifica compilazione locale g++ -Wall -Wconversion...');
+    // 2. Verifica compilazione (in locale con g++ o serverless con validatore)
+    console.log('[CopiaPicchio!] Verifica compilazione C++...');
     let testResult = await testProjectCompilation(project);
 
     // Se ci sono errori/warning, prova auto-guarigione con Gemini
@@ -209,7 +269,6 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
           project.main_cpp = fix.main_cpp;
           project = sanitizeProjectOutput(project, autore || 'Nome e Cognome');
 
-          // Ritesta compilazione
           testResult = await testProjectCompilation(project);
           console.log(`[CopiaPicchio!] Ritest dopo fix: successo = ${testResult.success}`);
         }
@@ -218,7 +277,7 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
       }
     }
 
-    // Aggiorna la relazione con l'output reale dell'esecuzione e verifica conformità
+    // Aggiorna la relazione con spiegazioni riga per riga e output reale dell'esecuzione
     project.readme_md = formatComprehensiveReadme({
       project,
       autore: autore || 'Nome e Cognome',
@@ -228,7 +287,7 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
     });
     project = sanitizeProjectOutput(project, autore || 'Nome e Cognome');
 
-    // 3. Salva progetto in memoria e su file persistente per "I Miei Compiti"
+    // 3. Salva progetto in memoria, su file e su Supabase
     const projectId = crypto.randomUUID();
     const finalData = {
       id: projectId,
@@ -236,7 +295,7 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
       formattedDate: data || new Date().toLocaleDateString('it-IT'),
       user: req.user.username,
       nome_progetto: project.nome_progetto,
-      titolo: project.titolo || `Esercizio del ${data || new Date().toLocaleDateString('it-IT')}`,
+      titolo: project.titolo || `Esercizi di informatica del ${data || new Date().toLocaleDateString('it-IT')}`,
       consegna: consegna || project.consegna_trascritta || '',
       project,
       testResult,
@@ -245,6 +304,9 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
 
     generatedProjects.set(projectId, finalData);
     compitiManager.saveCompito(finalData);
+
+    // Salva asincrono su Supabase
+    supabaseModule.saveCompitoSupabase(finalData).catch(() => {});
 
     return res.json({
       success: true,
@@ -263,7 +325,6 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
 app.get('/api/download-zip/:id', requireAuth, (req, res) => {
   const { id } = req.params;
   
-  // Cerca in memoria o nel gestore compiti persistente
   let projectEntry = generatedProjects.get(id);
   if (!projectEntry) {
     projectEntry = compitiManager.getCompitoById(id);
@@ -291,9 +352,9 @@ app.get('/api/download-zip/:id', requireAuth, (req, res) => {
   archive.pipe(res);
 
   // Inserisci file del progetto all'interno della cartella <nome_progetto>/
-  archive.append(project.main_cpp || '', { name: `${projectName}/main.cpp` });
-  archive.append(project.function_h || '', { name: `${projectName}/function.h` });
-  archive.append(project.function_cpp || '', { name: `${projectName}/function.cpp` });
+  archive.append(formatCppWithTabs(project.main_cpp || ''), { name: `${projectName}/main.cpp` });
+  archive.append(formatCppWithTabs(project.function_h || ''), { name: `${projectName}/function.h` });
+  archive.append(formatCppWithTabs(project.function_cpp || ''), { name: `${projectName}/function.cpp` });
   archive.append(ensureMakefileTabs(project.makefile || ''), { name: `${projectName}/makefile` });
   archive.append(project.install_md || '', { name: `${projectName}/INSTALL.md` });
   archive.append(project.readme_md || '', { name: `${projectName}/README.md` });
@@ -312,7 +373,6 @@ app.get('/api/download-zip/:id', requireAuth, (req, res) => {
     archive.file(gplPath, { name: `${projectName}/gpl-3.0.txt` });
   }
 
-  // Eventuali file ausiliari (es. CSV di input, file di testo)
   if (Array.isArray(project.input_files)) {
     for (const item of project.input_files) {
       if (item.filename && item.content) {
@@ -324,11 +384,16 @@ app.get('/api/download-zip/:id', requireAuth, (req, res) => {
   archive.finalize();
 });
 
-// Avvio del server
-app.listen(PORT, () => {
-  console.log(`====================================================`);
-  console.log(`🦜 CopiaPicchio! Server attivo su http://localhost:${PORT}`);
-  console.log(`🔑 Utenti abilitati: matty, zome`);
-  console.log(`🤖 Modello AI: Gemini 3.1 Flash Lite`);
-  console.log(`====================================================`);
-});
+// Esporta app per ambiente serverless Vercel
+module.exports = app;
+
+// Avvio locale quando eseguito direttamente con 'node server.js'
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`====================================================`);
+    console.log(`🦜 CopiaPicchio! Server attivo su http://localhost:${PORT}`);
+    console.log(`⚡ Pronto per deploy Serverless su Vercel`);
+    console.log(`🔒 Supabase Auth & Storage integrati`);
+    console.log(`====================================================`);
+  });
+}

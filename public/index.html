@@ -29,8 +29,8 @@
 
       <form id="login-form">
         <div class="form-group">
-          <label for="login-username">Nome Utente</label>
-          <input type="text" id="login-username" placeholder="Es. matty o zome" required autocomplete="username">
+          <label for="login-username">Email / Nome Utente</label>
+          <input type="text" id="login-username" placeholder="nome@scuola.it o username" required autocomplete="username">
         </div>
 
         <div class="form-group">
@@ -44,17 +44,9 @@
           <span>Accedi</span>
         </button>
 
-        <div class="quick-access-box">
-          <span class="quick-access-label">Accesso Rapido:</span>
-          <div class="quick-access-buttons">
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-quick-matty">
-              👤 matty
-            </button>
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-quick-zome">
-              👤 zome
-            </button>
-          </div>
-        </div>
+        <p class="auth-notice mt-2">
+          Autenticazione gestita con <strong>Supabase Auth</strong>. Crea le credenziali direttamente nella dashboard di Supabase.
+        </p>
       </form>
     </div>
   </div>

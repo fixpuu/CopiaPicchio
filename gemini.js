@@ -182,16 +182,18 @@ Il docente insegna esclusivamente il C++ scolastico di base. Qualsiasi costrutto
    Devi scomporre la consegna in una lista dettagliata di passaggi ("passaggi").
    Ogni requisito o funzione richiesta DEVE avere un elemento nell'array con:
    - "titolo": nome del requisito (es. Generare n numeri casuali tra -1000 e 1000)
-   - "spiegazione": spiegazione approfondita dell'obiettivo e della logica
-   - "prototipo": codice del prototipo (se applicabile)
-   - "prototipo_spiegazione": spiegazione della firma, dei tipi e dei parametri
-   - "implementazione": codice della funzione in function.cpp
-   - "implementazione_spiegazione": spiegazione riga per riga di come lavora l'algoritmo
-   - "utilizzo_main": codice d'uso nel main.cpp
+   - "spiegazione": spiegazione approfondita dell'obiettivo e del problema informatico
+   - "prototipo": codice del prototipo (es. int get_casuale(int da, int a);)
+   - "prototipo_spiegazione": spiegazione della firma, del tipo restituito e dei singoli parametri
+   - "implementazione": codice della funzione in function.cpp (indentato con tabulazioni)
+   - "implementazione_spiegazione": spiegazione riga per riga del codice (es. elenco puntato con cosa fa ciascuna riga, il ruolo delle variabili, i cicli for, i controlli if, i cast espliciti, il return), chiara e approfondita senza esagerare
+   - "utilizzo_main": frammento di codice che richiama la funzione nel main.cpp
    - "test_output": output realistico mostrato a video
 
 Restituisci ESCLUSIVAMENTE un JSON valido con i campi indicati.
 `;
+
+const { formatCppWithTabs } = require('./compiler');
 
 /**
  * Format a comprehensive, rich, step-by-step README.md matching the student archive
@@ -224,21 +226,21 @@ function formatComprehensiveReadme({ project, autore, classe, data, testResult }
       }
 
       if (p.prototipo) {
-        md += `#### Prototipo\n\nNel \`function.h\`:\n\n\`\`\`cpp\n${p.prototipo}\n\`\`\`\n\n`;
+        md += `#### Prototipo\n\nNel \`function.h\`:\n\n\`\`\`cpp\n${formatCppWithTabs(p.prototipo)}\n\`\`\`\n\n`;
         if (p.prototipo_spiegazione) {
           md += `${p.prototipo_spiegazione}\n\n`;
         }
       }
 
       if (p.implementazione) {
-        md += `#### Implementazione\n\nNel \`function.cpp\`:\n\n\`\`\`cpp\n${p.implementazione}\n\`\`\`\n\n`;
+        md += `#### Implementazione\n\nNel \`function.cpp\`:\n\n\`\`\`cpp\n${formatCppWithTabs(p.implementazione)}\n\`\`\`\n\n`;
         if (p.implementazione_spiegazione) {
-          md += `${p.implementazione_spiegazione}\n\n`;
+          md += `Spiegazione del codice:\n${p.implementazione_spiegazione}\n\n`;
         }
       }
 
       if (p.utilizzo_main) {
-        md += `#### Utilizzo\n\nNel \`main.cpp\`:\n\n\`\`\`cpp\n${p.utilizzo_main}\n\`\`\`\n\n`;
+        md += `#### Utilizzo\n\nNel \`main.cpp\`:\n\n\`\`\`cpp\n${formatCppWithTabs(p.utilizzo_main)}\n\`\`\`\n\n`;
       }
 
       if (p.test_output) {
