@@ -1,0 +1,19 @@
+#makefile
+
+a.out: function.o main.o
+	g++ -Wall -Wconversion function.o main.o
+
+function.o: function.cpp function.h
+	g++ -Wall -Wconversion -c function.cpp
+
+main.o: function.h main.cpp
+	g++ -Wall -Wconversion -c main.cpp
+
+clean:
+	rm -f *.o a.out
+
+run: a.out
+	./a.out
+
+doc:
+	pandoc -o README.pdf README.md

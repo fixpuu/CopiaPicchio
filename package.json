@@ -1,0 +1,18 @@
+{
+  "name": "copiapicchio",
+  "version": "1.0.0",
+  "description": "CopiaPicchio! - Risolutore Didattico per Compiti di Informatica C++ con Gemini 3.1 Flash Lite",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "dependencies": {
+    "archiver": "^8.0.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
+    "multer": "^2.4.0"
+  }
+}

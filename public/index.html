@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CopiaPicchio! - Risolutore Didattico Esercizi C++</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦜</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  <!-- Prism for syntax highlighting -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+  <!-- Marked for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-makefile.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markdown.min.js"></script>
+</head>
+<body>
+
+  <!-- ================= AUTH MODAL ================= -->
+  <div id="auth-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="logo-badge">🦜</div>
+        <h2>Benvenuto su CopiaPicchio!</h2>
+        <p>Accesso riservato. Inserisci le credenziali autorizzate.</p>
+      </div>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label for="login-username">Nome Utente</label>
+          <input type="text" id="login-username" placeholder="Es. matty o zome" required autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+
+        <div id="login-error" class="alert-error hidden"></div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="btn-login-submit">
+          <span>Accedi</span>
+        </button>
+
+        <div class="quick-access-box">
+          <span class="quick-access-label">Accesso Rapido:</span>
+          <div class="quick-access-buttons">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-quick-matty">
+              👤 matty
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-quick-zome">
+              👤 zome
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= APP HEADER ================= -->
+  <header class="app-header">
+    <div class="container header-content">
+      <div class="brand">
+        <div class="brand-logo">🦜</div>
+        <div class="brand-text">
+          <h1>CopiaPicchio!</h1>
+          <span class="brand-tag">Risolutore Didattico per Compiti di Informatica C++</span>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <div class="ai-status-pill">
+          <span class="status-dot"></span>
+          <span class="status-label">Gemini 3.1 Flash Lite</span>
+        </div>
+        <div class="user-profile" id="user-profile-badge">
+          <span class="user-avatar" id="avatar-text">👤</span>
+          <span class="user-name" id="current-username">Utente</span>
+          <button class="btn btn-ghost btn-sm" id="btn-logout" title="Esci">Esci</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= MAIN APP CONTAINER ================= -->
+  <main class="container main-content">
+
+    <!-- FORM SEZIONE CONSEGNA -->
+    <section class="card input-card" id="input-section">
+      <div class="card-header">
+        <div class="section-title">
+          <h2>1. Consegna dell'Esercizio</h2>
+          <p>Allega la foto della lavagna/foglio oppure incolla il testo del compito.</p>
+        </div>
+      </div>
+
+      <form id="exercise-form">
+        <!-- Dual upload: Photo & Text -->
+        <div class="input-grid">
+          
+          <!-- Image upload / Drop zone / Paste -->
+          <div class="upload-zone-wrapper">
+            <label class="field-label">Foto della consegna (lavagna, quaderno o testo)</label>
+            <div class="drop-zone" id="drop-zone">
+              <input type="file" id="file-photo" accept="image/*" class="file-input-hidden">
+              <div class="drop-zone-content" id="drop-zone-empty">
+                <div class="drop-icon">📷</div>
+                <p class="drop-title">Trascina una foto, selezionala o <strong>incolla da tastiera (Ctrl+V)</strong></p>
+                <span class="drop-subtitle">Supporta PNG, JPG, WEBP (foto lavagna, quaderno o stampata)</span>
+                <button type="button" class="btn btn-secondary btn-sm mt-2" id="btn-browse-file">Sfoglia Immagine</button>
+              </div>
+
+              <!-- Preview quando selezionata -->
+              <div class="drop-zone-preview hidden" id="drop-zone-preview">
+                <img id="photo-preview-img" src="" alt="Anteprima consegna">
+                <div class="preview-overlay">
+                  <span id="photo-filename" class="preview-filename"></span>
+                  <button type="button" class="btn-remove-photo" id="btn-remove-photo" title="Rimuovi foto">✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Text area consegna -->
+          <div class="text-zone-wrapper">
+            <label for="text-consegna" class="field-label">Testo della consegna (opzionale se hai allegato la foto)</label>
+            <textarea id="text-consegna" rows="8" placeholder="Es. Creare un progetto informatico con relativo makefile e istruzioni per compilare ed eseguire un programma che genera n numeri interi casuali tra -1000 e +1000, li inserisce in un vettore e li salva in un file. Realizzare le funzioni: calcolo media, minimo, massimo, ordinamento crescente..."></textarea>
+          </div>
+
+        </div>
+
+        <!-- Parametri facoltativi e metadati -->
+        <div class="details-section">
+          <button type="button" class="accordion-toggle" id="toggle-details">
+            <span>⚙️ Parametri Avanzati (Autore, Classe, Data, Nome Progetto)</span>
+            <span class="toggle-icon" id="toggle-icon">▼</span>
+          </button>
+
+          <div class="details-content collapsed" id="details-content">
+            <div class="fields-row">
+              <div class="form-group flex-1">
+                <label for="field-autore">Nome Autore (nella relazione)</label>
+                <input type="text" id="field-autore" value="Nome e Cognome" placeholder="Es. Nome e Cognome">
+              </div>
+
+              <div class="form-group flex-1">
+                <label for="field-classe">Classe</label>
+                <input type="text" id="field-classe" value="3B IT" placeholder="Es. 3B IT">
+              </div>
+
+              <div class="form-group flex-1">
+                <label for="field-data">Data</label>
+                <input type="text" id="field-data" placeholder="DD/MM/YYYY">
+              </div>
+            </div>
+
+            <div class="fields-row">
+              <div class="form-group flex-1">
+                <label for="field-nome-progetto">Nome Cartella Progetto (snake_case opzionale)</label>
+                <input type="text" id="field-nome-progetto" placeholder="Es. ripasso_vettori (vuoto = automatico)">
+              </div>
+
+              <div class="form-group flex-2">
+                <label for="field-argomenti">Argomenti Trattati (opzionale)</label>
+                <input type="text" id="field-argomenti" placeholder="Es. Bubble sort, passaggio parametri per riferimento, fstream, warning -Wconversion">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Submit button -->
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary btn-lg" id="btn-generate">
+            <span class="btn-icon">⚡</span>
+            <span>Risolvi con CopiaPicchio!</span>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- LOADING STEPPER OVERLAY / BOX -->
+    <section class="card loading-card hidden" id="loading-section">
+      <div class="loading-header">
+        <div class="spinner"></div>
+        <h3>CopiaPicchio al lavoro...</h3>
+        <p>Gemini 3.1 Flash Lite sta elaborando l'esercizio e verificando il codice con g++.</p>
+      </div>
+
+      <div class="stepper">
+        <div class="step-item" id="step-1">
+          <div class="step-icon">📸</div>
+          <div class="step-label">1. Analisi Consegna & Riconoscimento Foto</div>
+        </div>
+        <div class="step-item" id="step-2">
+          <div class="step-icon">🧠</div>
+          <div class="step-label">2. Generazione Codice C++ a 3 File & Makefile</div>
+        </div>
+        <div class="step-item" id="step-3">
+          <div class="step-icon">⚙️</div>
+          <div class="step-label">3. Compilazione Locale g++ -Wall -Wconversion</div>
+        </div>
+        <div class="step-item" id="step-4">
+          <div class="step-icon">🧪</div>
+          <div class="step-label">4. Esecuzione Reale e Cattura Output Terminale</div>
+        </div>
+        <div class="step-item" id="step-5">
+          <div class="step-icon">📝</div>
+          <div class="step-label">5. Redazione Relazione README.md & INSTALL.md</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RESULTS WORKSPACE -->
+    <section class="card results-card hidden" id="results-section">
+      <div class="results-header">
+        <div class="results-meta">
+          <span class="badge badge-success" id="badge-compilation">
+            ✓ Compilazione g++: 0 Errori, 0 Warning
+          </span>
+          <span class="badge badge-info" id="badge-project-name">
+            📁 cartella: <strong id="res-folder-name">progetto</strong>
+          </span>
+          <h2 id="res-project-title">Esercizio Risolto</h2>
+        </div>
+
+        <div class="results-actions">
+          <button class="btn btn-secondary" id="btn-copy-readme">
+            <span>📋 Copia Relazione</span>
+          </button>
+          <button class="btn btn-secondary" id="btn-print-doc">
+            <span>🖨️ Stampa / Salva PDF</span>
+          </button>
+          <a href="#" class="btn btn-primary" id="btn-download-zip" download>
+            <span>📦 Scarica Progetto (.ZIP)</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- TABS -->
+      <div class="tabs-nav" id="tabs-nav">
+        <button class="tab-btn active" data-tab="tab-readme">📄 README.md (Relazione)</button>
+        <button class="tab-btn" data-tab="tab-function-h">function.h</button>
+        <button class="tab-btn" data-tab="tab-function-cpp">function.cpp</button>
+        <button class="tab-btn" data-tab="tab-main-cpp">main.cpp</button>
+        <button class="tab-btn" data-tab="tab-makefile">makefile</button>
+        <button class="tab-btn" data-tab="tab-install-md">INSTALL.md</button>
+        <button class="tab-btn" data-tab="tab-terminal">💻 Terminale & Test</button>
+        <button class="tab-btn" data-tab="tab-files">📁 Tutti i File</button>
+      </div>
+
+      <!-- TAB CONTENT PANES -->
+      <div class="tab-panes">
+
+        <!-- TAB 1: README.MD -->
+        <div class="tab-pane active" id="tab-readme">
+          <div class="pane-toolbar">
+            <div class="view-switch">
+              <button class="subtab-btn active" id="btn-view-rendered">Anteprima Didattica</button>
+              <button class="subtab-btn" id="btn-view-raw">Sorgente Markdown</button>
+            </div>
+            <button class="btn btn-sm btn-ghost" id="btn-copy-tab-readme">Copia Markdown</button>
+          </div>
+          <div class="markdown-preview" id="readme-rendered"></div>
+          <pre class="raw-code-box hidden" id="readme-raw"><code class="language-markdown" id="code-readme-raw"></code></pre>
+        </div>
+
+        <!-- TAB 2: FUNCTION.H -->
+        <div class="tab-pane" id="tab-function-h">
+          <div class="pane-toolbar">
+            <span class="file-badge">Header C++ (Prototipi & Include Guards)</span>
+            <button class="btn btn-sm btn-ghost" data-copy-target="code-function-h">Copia Codice</button>
+          </div>
+          <pre class="code-box"><code class="language-cpp" id="code-function-h"></code></pre>
+        </div>
+
+        <!-- TAB 3: FUNCTION.CPP -->
+        <div class="tab-pane" id="tab-function-cpp">
+          <div class="pane-toolbar">
+            <span class="file-badge">Implementazione Funzioni Ausiliarie</span>
+            <button class="btn btn-sm btn-ghost" data-copy-target="code-function-cpp">Copia Codice</button>
+          </div>
+          <pre class="code-box"><code class="language-cpp" id="code-function-cpp"></code></pre>
+        </div>
+
+        <!-- TAB 4: MAIN.CPP -->
+        <div class="tab-pane" id="tab-main-cpp">
+          <div class="pane-toolbar">
+            <span class="file-badge">Punto di Ingresso & Gestione Parametri</span>
+            <button class="btn btn-sm btn-ghost" data-copy-target="code-main-cpp">Copia Codice</button>
+          </div>
+          <pre class="code-box"><code class="language-cpp" id="code-main-cpp"></code></pre>
+        </div>
+
+        <!-- TAB 5: MAKEFILE -->
+        <div class="tab-pane" id="tab-makefile">
+          <div class="pane-toolbar">
+            <span class="file-badge">Makefile con Indentazione TAB</span>
+            <button class="btn btn-sm btn-ghost" data-copy-target="code-makefile">Copia Makefile</button>
+          </div>
+          <pre class="code-box"><code class="language-makefile" id="code-makefile"></code></pre>
+        </div>
+
+        <!-- TAB 6: INSTALL.MD -->
+        <div class="tab-pane" id="tab-install-md">
+          <div class="pane-toolbar">
+            <span class="file-badge">Istruzioni di Compilazione ed Esecuzione</span>
+            <button class="btn btn-sm btn-ghost" data-copy-target="code-install-md">Copia Contenuto</button>
+          </div>
+          <div class="markdown-preview" id="install-rendered"></div>
+        </div>
+
+        <!-- TAB 7: TERMINALE & TEST -->
+        <div class="tab-pane" id="tab-terminal">
+          <div class="pane-toolbar">
+            <span class="file-badge">Log Esecuzione Reale g++ e ./a.out</span>
+          </div>
+          <div class="terminal-window">
+            <div class="terminal-bar">
+              <span class="term-btn red"></span>
+              <span class="term-btn yellow"></span>
+              <span class="term-btn green"></span>
+              <span class="term-title">studente@scuola:~/progetti</span>
+            </div>
+            <div class="terminal-body" id="terminal-body">
+              <!-- Riempito dinamicamente -->
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 8: TUTTI I FILE -->
+        <div class="tab-pane" id="tab-files">
+          <div class="pane-toolbar">
+            <span class="file-badge">Architettura Progetto Completa</span>
+          </div>
+          <div class="file-tree-list" id="file-tree-list">
+            <!-- Riempito dinamicamente -->
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <div class="container footer-content">
+      <p><strong>CopiaPicchio!</strong> — Risolutore Esercizi C++ con Gemini 3.1 Flash Lite & g++ locale.</p>
+      <p class="footer-note">Genera codice a 3 file, makefile, INSTALL.md e relazione README.md conforme agli standard scolastici.</p>
+    </div>
+  </footer>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

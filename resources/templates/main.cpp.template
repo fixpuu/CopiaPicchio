@@ -1,0 +1,9 @@
+#include "function.h"
+
+int main(int argc, char **argv) {
+    // Gestione parametri linea di comando (se previsti)
+    
+    // Logica principale del programma
+    
+    return 0;
+}
