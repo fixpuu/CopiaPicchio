@@ -3,6 +3,7 @@ let currentUser = null;
 let currentProject = null;
 let currentProjectId = null;
 let selectedPhotoFile = null;
+let sessionToken = localStorage.getItem('cp_session_token') || null;
 
 // Auth Elements
 const authModal = document.getElementById('auth-modal');
@@ -14,6 +15,15 @@ const currentUsernameDisplay = document.getElementById('current-username');
 const btnLogout = document.getElementById('btn-logout');
 const btnQuickMatty = document.getElementById('btn-quick-matty');
 const btnQuickZome = document.getElementById('btn-quick-zome');
+
+// Navigation Tabs
+const navBtnNuovo = document.getElementById('nav-btn-nuovo');
+const navBtnCompiti = document.getElementById('nav-btn-compiti');
+const compitiBadge = document.getElementById('compiti-badge');
+const inputSection = document.getElementById('input-section');
+const compitiSection = document.getElementById('compiti-section');
+const compitiList = document.getElementById('compiti-list');
+const btnCompitiNuovo = document.getElementById('btn-compiti-nuovo');
 
 // Form Elements
 const exerciseForm = document.getElementById('exercise-form');
@@ -63,14 +73,28 @@ const today = new Date();
 const formattedDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
 fieldData.value = formattedDate;
 
+// ================= API FETCH HELPER (WITH AUTO TOKEN) =================
+
+function apiFetch(url, options = {}) {
+  options.headers = options.headers || {};
+  if (sessionToken) {
+    if (options.headers instanceof Headers) {
+      options.headers.set('x-session-token', sessionToken);
+    } else {
+      options.headers['x-session-token'] = sessionToken;
+    }
+  }
+  return fetch(url, options);
+}
+
 // ================= AUTHENTICATION =================
 
 async function checkAuth() {
   try {
-    const res = await fetch('/api/auth/me');
+    const res = await apiFetch('/api/auth/me');
     const data = await res.json();
     if (data.authenticated) {
-      setAuthenticatedUser(data.username);
+      setAuthenticatedUser(data.username, data.sessionToken || sessionToken);
     } else {
       showAuthModal();
     }
@@ -79,10 +103,17 @@ async function checkAuth() {
   }
 }
 
-function setAuthenticatedUser(username) {
+function setAuthenticatedUser(username, token) {
   currentUser = username;
+  sessionToken = token;
+  if (token) localStorage.setItem('cp_session_token', token);
+  localStorage.setItem('cp_username', username);
+
   currentUsernameDisplay.textContent = username;
   authModal.classList.add('hidden');
+
+  // Load user homeworks
+  loadCompiti();
 }
 
 function showAuthModal() {
@@ -106,7 +137,7 @@ loginForm.addEventListener('submit', async (e) => {
 
     const data = await res.json();
     if (res.ok && data.success) {
-      setAuthenticatedUser(data.username);
+      setAuthenticatedUser(data.username, data.sessionToken);
       showToast(`Accesso eseguito come ${data.username}`, 'success');
     } else {
       loginError.textContent = data.error || 'Credenziali non valide.';
@@ -120,8 +151,11 @@ loginForm.addEventListener('submit', async (e) => {
 
 btnLogout.addEventListener('click', async () => {
   try {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await apiFetch('/api/auth/logout', { method: 'POST' });
   } catch (_) {}
+  localStorage.removeItem('cp_session_token');
+  localStorage.removeItem('cp_username');
+  sessionToken = null;
   showAuthModal();
   showToast('Disconnessione completata', 'success');
 });
@@ -139,6 +173,136 @@ btnQuickZome.addEventListener('click', () => {
   loginForm.requestSubmit();
 });
 
+// ================= NAVIGATION =================
+
+navBtnNuovo.addEventListener('click', () => {
+  showNuovoCompitoView();
+});
+
+navBtnCompiti.addEventListener('click', () => {
+  showCompitiView();
+});
+
+btnCompitiNuovo.addEventListener('click', () => {
+  showNuovoCompitoView();
+});
+
+function showNuovoCompitoView() {
+  navBtnNuovo.classList.add('active');
+  navBtnCompiti.classList.remove('active');
+  compitiSection.classList.add('hidden');
+  inputSection.classList.remove('hidden');
+}
+
+function showCompitiView() {
+  navBtnCompiti.classList.add('active');
+  navBtnNuovo.classList.remove('active');
+  inputSection.classList.add('hidden');
+  resultsSection.classList.add('hidden');
+  loadingSection.classList.add('hidden');
+  compitiSection.classList.remove('hidden');
+  loadCompiti();
+}
+
+// ================= I MIEI COMPITI =================
+
+async function loadCompiti() {
+  if (!currentUser) return;
+  try {
+    const res = await apiFetch('/api/compiti');
+    const data = await res.json();
+    if (res.ok && data.success) {
+      renderCompitiList(data.compiti || []);
+    }
+  } catch (err) {
+    console.error('Errore caricamento compiti:', err);
+  }
+}
+
+function renderCompitiList(compiti) {
+  compitiBadge.textContent = compiti.length;
+
+  if (compiti.length === 0) {
+    compitiList.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📂</div>
+        <h3>Nessun compito salvato</h3>
+        <p>I compiti che risolverai verranno memorizzati automaticamente qui.</p>
+        <button class="btn btn-primary btn-sm mt-2" onclick="showNuovoCompitoView()">+ Crea il tuo primo compito</button>
+      </div>
+    `;
+    return;
+  }
+
+  let html = '';
+  for (const c of compiti) {
+    html += `
+      <div class="compito-card" id="card-${c.id}">
+        <div class="compito-info">
+          <div class="compito-meta">
+            <span class="badge badge-info">📁 ${escapeHtml(c.nome_progetto)}</span>
+            <span class="badge badge-success">✓ 0 Errori</span>
+            <span class="file-badge">📅 ${escapeHtml(c.formattedDate || '')}</span>
+          </div>
+          <div class="compito-title">${escapeHtml(c.titolo || c.nome_progetto)}</div>
+          <div class="compito-snippet">${escapeHtml(c.consegna_preview || '')}</div>
+        </div>
+        <div class="compito-actions">
+          <button class="btn btn-secondary btn-sm" onclick="openCompito('${c.id}')" title="Apri esercizio">
+            👁️ Apri
+          </button>
+          <a href="/api/download-zip/${c.id}" class="btn btn-primary btn-sm" download title="Scarica ZIP">
+            📦 ZIP
+          </a>
+          <button class="btn btn-danger btn-sm" onclick="deleteCompito('${c.id}')" title="Elimina">
+            ✕
+          </button>
+        </div>
+      </div>
+    `;
+  }
+  compitiList.innerHTML = html;
+}
+
+window.openCompito = async function(id) {
+  try {
+    const res = await apiFetch(`/api/compiti/${id}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Impossibile aprire il compito');
+    }
+
+    compitiSection.classList.add('hidden');
+    inputSection.classList.remove('hidden');
+    renderResults({
+      projectId: data.compito.id,
+      project: data.compito.project,
+      testResult: data.compito.testResult
+    });
+    resultsSection.classList.remove('hidden');
+    resultsSection.scrollIntoView({ behavior: 'smooth' });
+    showToast(`Compito "${data.compito.nome_progetto}" aperto!`, 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+window.deleteCompito = async function(id) {
+  if (!confirm('Sei sicuro di voler eliminare questo compito?')) return;
+  try {
+    const res = await apiFetch(`/api/compiti/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast('Compito eliminato', 'success');
+      loadCompiti();
+    } else {
+      showToast(data.error || 'Errore eliminazione', 'error');
+    }
+  } catch (err) {
+    showToast('Errore durante l\'eliminazione', 'error');
+  }
+};
+
 // ================= FILE UPLOAD & PASTE =================
 
 function setPhotoFile(file) {
@@ -147,7 +311,7 @@ function setPhotoFile(file) {
     return;
   }
   selectedPhotoFile = file;
-  photoFilename.textContent = file.name || 'foto_incollata.png';
+  photoFilename.textContent = file.name || 'foto_consegna.png';
 
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -166,7 +330,11 @@ function clearPhotoFile() {
   dropZoneEmpty.classList.remove('hidden');
 }
 
-btnBrowseFile.addEventListener('click', () => filePhotoInput.click());
+btnBrowseFile.addEventListener('click', (e) => {
+  e.stopPropagation();
+  filePhotoInput.click();
+});
+
 dropZone.addEventListener('click', (e) => {
   if (e.target !== btnRemovePhoto && !dropZonePreview.contains(e.target)) {
     filePhotoInput.click();
@@ -248,7 +416,7 @@ exerciseForm.addEventListener('submit', async (e) => {
   resetStepper();
   loadingSection.scrollIntoView({ behavior: 'smooth' });
 
-  // Simulate progressive steps while server is processing
+  // Progressive steps simulation
   const stepInterval = runStepperSimulation();
 
   try {
@@ -262,7 +430,7 @@ exerciseForm.addEventListener('submit', async (e) => {
     if (fieldNomeProgetto.value.trim()) formData.append('nome_progetto', fieldNomeProgetto.value.trim());
     if (fieldArgomenti.value.trim()) formData.append('argomenti', fieldArgomenti.value.trim());
 
-    const res = await fetch('/api/generate', {
+    const res = await apiFetch('/api/generate', {
       method: 'POST',
       body: formData
     });
@@ -284,7 +452,8 @@ exerciseForm.addEventListener('submit', async (e) => {
       resultsSection.classList.remove('hidden');
       resultsSection.scrollIntoView({ behavior: 'smooth' });
       btnGenerate.disabled = false;
-      showToast('Progetto generato con successo!', 'success');
+      showToast('Esercizio risolto e salvato nei tuoi compiti!', 'success');
+      loadCompiti(); // refresh compiti badge & list
     }, 600);
 
   } catch (err) {
@@ -313,7 +482,7 @@ function runStepperSimulation() {
       currentStep++;
       document.getElementById(`step-${currentStep}`).classList.add('active');
     }
-  }, 3500);
+  }, 4000);
 }
 
 function completeAllSteps() {
@@ -383,7 +552,7 @@ function renderTerminal(project, testResult) {
 
   termHtml += `<span class="term-prompt">studente@scuola:~/progetti/${project.nome_progetto}$</span> <span class="term-cmd">echo $?</span>\n`;
   termHtml += `0\n\n`;
-  termHtml += `<span class="term-success">Funziona. Zero warning, zero errori.</span>`;
+  termHtml += `<span class="term-success">Funziona. Zero warning, zero errori con g++ -Wall -Wconversion.</span>`;
 
   terminalBody.innerHTML = termHtml;
 }

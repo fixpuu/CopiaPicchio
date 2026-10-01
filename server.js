@@ -6,8 +6,9 @@ const cookieParser = require('cookie-parser');
 const { ZipArchive } = require('archiver');
 const crypto = require('crypto');
 
-const { generateExercise, fixExerciseCode } = require('./gemini');
+const { generateExercise, fixExerciseCode, formatComprehensiveReadme } = require('./gemini');
 const { testProjectCompilation, ensureMakefileTabs } = require('./compiler');
+const compitiManager = require('./data/compitiManager');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,8 +20,8 @@ const USERS = {
   'zome': 'zome01'
 };
 
-// Memory store per sessioni attive e progetti generati
-const activeSessions = new Map();
+// Memory store per sessioni attive (sincronizzato con data/sessions.json)
+const activeSessions = compitiManager.loadSessions();
 const generatedProjects = new Map();
 
 // Configurazione Multer per upload file (memoria)
@@ -34,11 +35,12 @@ app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 app.use(cookieParser(COOKIE_SECRET));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Middleware di autenticazione
+// Middleware di autenticazione (supporta cookie o header x-session-token da localStorage)
 function requireAuth(req, res, next) {
-  const token = req.signedCookies?.cp_session || req.headers['x-session-token'];
+  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session;
   if (token && activeSessions.has(token)) {
     req.user = activeSessions.get(token);
+    req.sessionToken = token;
     return next();
   }
   return res.status(401).json({ error: 'Non autorizzato. Effettua il login su CopiaPicchio!' });
@@ -98,12 +100,13 @@ app.post('/api/auth/login', (req, res) => {
   if (expectedPassword && expectedPassword === password) {
     const sessionToken = crypto.randomBytes(32).toString('hex');
     activeSessions.set(sessionToken, { username: cleanUser, loginTime: Date.now() });
+    compitiManager.persistSessions(activeSessions);
 
     res.cookie('cp_session', sessionToken, {
       signed: true,
       httpOnly: true,
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 giorni
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 giorni
     });
 
     return res.json({ success: true, username: cleanUser, sessionToken });
@@ -113,21 +116,45 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
-  const token = req.signedCookies?.cp_session || req.headers['x-session-token'];
+  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session;
   if (token) {
     activeSessions.delete(token);
+    compitiManager.persistSessions(activeSessions);
   }
   res.clearCookie('cp_session');
   res.json({ success: true });
 });
 
 app.get('/api/auth/me', (req, res) => {
-  const token = req.signedCookies?.cp_session || req.headers['x-session-token'];
+  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session;
   if (token && activeSessions.has(token)) {
     const session = activeSessions.get(token);
-    return res.json({ authenticated: true, username: session.username });
+    return res.json({ authenticated: true, username: session.username, sessionToken: token });
   }
   return res.json({ authenticated: false });
+});
+
+// ================= API I MIEI COMPITI =================
+
+app.get('/api/compiti', requireAuth, (req, res) => {
+  const list = compitiManager.getCompitiByUser(req.user.username);
+  res.json({ success: true, compiti: list });
+});
+
+app.get('/api/compiti/:id', requireAuth, (req, res) => {
+  const compito = compitiManager.getCompitoById(req.params.id);
+  if (!compito || compito.user !== req.user.username) {
+    return res.status(404).json({ error: 'Compito non trovato.' });
+  }
+  res.json({ success: true, compito });
+});
+
+app.delete('/api/compiti/:id', requireAuth, (req, res) => {
+  const ok = compitiManager.deleteCompito(req.params.id, req.user.username);
+  if (!ok) {
+    return res.status(404).json({ error: 'Compito non trovato o già eliminato.' });
+  }
+  res.json({ success: true });
 });
 
 // ================= API GENERAZIONE ESERCIZIO =================
@@ -191,18 +218,33 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
       }
     }
 
-    // 3. Salva progetto in memoria con ID univoco
+    // Aggiorna la relazione con l'output reale dell'esecuzione e verifica conformità
+    project.readme_md = formatComprehensiveReadme({
+      project,
+      autore: autore || 'Nome e Cognome',
+      classe: classe || '3B IT',
+      data: data || new Date().toLocaleDateString('it-IT'),
+      testResult
+    });
+    project = sanitizeProjectOutput(project, autore || 'Nome e Cognome');
+
+    // 3. Salva progetto in memoria e su file persistente per "I Miei Compiti"
     const projectId = crypto.randomUUID();
     const finalData = {
       id: projectId,
       createdAt: new Date().toISOString(),
+      formattedDate: data || new Date().toLocaleDateString('it-IT'),
       user: req.user.username,
+      nome_progetto: project.nome_progetto,
+      titolo: project.titolo || `Esercizio del ${data || new Date().toLocaleDateString('it-IT')}`,
+      consegna: consegna || project.consegna_trascritta || '',
       project,
       testResult,
       photoAttached: !!photo
     };
 
     generatedProjects.set(projectId, finalData);
+    compitiManager.saveCompito(finalData);
 
     return res.json({
       success: true,
@@ -220,10 +262,15 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
 
 app.get('/api/download-zip/:id', requireAuth, (req, res) => {
   const { id } = req.params;
-  const projectEntry = generatedProjects.get(id);
+  
+  // Cerca in memoria o nel gestore compiti persistente
+  let projectEntry = generatedProjects.get(id);
+  if (!projectEntry) {
+    projectEntry = compitiManager.getCompitoById(id);
+  }
 
   if (!projectEntry) {
-    return res.status(404).json({ error: 'Progetto non trovato o sessione scaduta.' });
+    return res.status(404).json({ error: 'Progetto non trovato.' });
   }
 
   const { project } = projectEntry;

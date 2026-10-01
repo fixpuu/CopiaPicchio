@@ -2,8 +2,8 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CopiaPicchio! - Risolutore Didattico Esercizi C++</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>CopiaPicchio!</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦜</text></svg>">
   <link rel="stylesheet" href="style.css">
   <!-- Prism for syntax highlighting -->
@@ -23,8 +23,8 @@
     <div class="modal-card">
       <div class="modal-header">
         <div class="logo-badge">🦜</div>
-        <h2>Benvenuto su CopiaPicchio!</h2>
-        <p>Accesso riservato. Inserisci le credenziali autorizzate.</p>
+        <h2>Accedi a CopiaPicchio!</h2>
+        <p>Accesso studenti e docenti.</p>
       </div>
 
       <form id="login-form">
@@ -66,9 +66,19 @@
         <div class="brand-logo">🦜</div>
         <div class="brand-text">
           <h1>CopiaPicchio!</h1>
-          <span class="brand-tag">Risolutore Didattico per Compiti di Informatica C++</span>
         </div>
       </div>
+
+      <!-- Navigation tabs -->
+      <nav class="main-nav">
+        <button class="nav-tab active" id="nav-btn-nuovo">
+          <span>✍️ Nuovo Compito</span>
+        </button>
+        <button class="nav-tab" id="nav-btn-compiti">
+          <span>📚 I Miei Compiti</span>
+          <span class="nav-badge" id="compiti-badge">0</span>
+        </button>
+      </nav>
 
       <div class="header-status">
         <div class="ai-status-pill">
@@ -87,12 +97,29 @@
   <!-- ================= MAIN APP CONTAINER ================= -->
   <main class="container main-content">
 
+    <!-- SEZIONE "I MIEI COMPITI" (ARCHIVIO PERSONALE) -->
+    <section class="card compiti-card hidden" id="compiti-section">
+      <div class="card-header flex-header">
+        <div class="section-title">
+          <h2>📚 I Miei Compiti</h2>
+          <p>Tutti gli esercizi svolti salvati nel tuo profilo. Puoi riaprirli o riscaricarli quando vuoi.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" id="btn-compiti-nuovo">
+          <span>+ Nuovo Compito</span>
+        </button>
+      </div>
+
+      <div id="compiti-list" class="compiti-grid">
+        <!-- Riempito dinamicamente da app.js -->
+      </div>
+    </section>
+
     <!-- FORM SEZIONE CONSEGNA -->
     <section class="card input-card" id="input-section">
       <div class="card-header">
         <div class="section-title">
-          <h2>1. Consegna dell'Esercizio</h2>
-          <p>Allega la foto della lavagna/foglio oppure incolla il testo del compito.</p>
+          <h2>Consegna dell'Esercizio</h2>
+          <p>Scatta o carica la foto del compito, oppure incolla il testo.</p>
         </div>
       </div>
 
@@ -102,14 +129,14 @@
           
           <!-- Image upload / Drop zone / Paste -->
           <div class="upload-zone-wrapper">
-            <label class="field-label">Foto della consegna (lavagna, quaderno o testo)</label>
+            <label class="field-label">Foto della consegna (lavagna, foglio o quaderno)</label>
             <div class="drop-zone" id="drop-zone">
               <input type="file" id="file-photo" accept="image/*" class="file-input-hidden">
               <div class="drop-zone-content" id="drop-zone-empty">
                 <div class="drop-icon">📷</div>
-                <p class="drop-title">Trascina una foto, selezionala o <strong>incolla da tastiera (Ctrl+V)</strong></p>
-                <span class="drop-subtitle">Supporta PNG, JPG, WEBP (foto lavagna, quaderno o stampata)</span>
-                <button type="button" class="btn btn-secondary btn-sm mt-2" id="btn-browse-file">Sfoglia Immagine</button>
+                <p class="drop-title">Tocca per scattare/selezionare una foto o <strong>incolla (Ctrl+V)</strong></p>
+                <span class="drop-subtitle">PNG, JPG, WEBP (foto lavagna, quaderno o stampato)</span>
+                <button type="button" class="btn btn-secondary btn-sm mt-2" id="btn-browse-file">Scegli Foto</button>
               </div>
 
               <!-- Preview quando selezionata -->
@@ -126,7 +153,7 @@
           <!-- Text area consegna -->
           <div class="text-zone-wrapper">
             <label for="text-consegna" class="field-label">Testo della consegna (opzionale se hai allegato la foto)</label>
-            <textarea id="text-consegna" rows="8" placeholder="Es. Creare un progetto informatico con relativo makefile e istruzioni per compilare ed eseguire un programma che genera n numeri interi casuali tra -1000 e +1000, li inserisce in un vettore e li salva in un file. Realizzare le funzioni: calcolo media, minimo, massimo, ordinamento crescente..."></textarea>
+            <textarea id="text-consegna" rows="8" placeholder="Es. Creare un programma che genera n numeri casuali tra -1000 e +1000, li inserisce in un vettore e li salva in un file. Realizzare le funzioni: calcolo media, minimo, massimo, ordinamento crescente..."></textarea>
           </div>
 
         </div>
@@ -134,7 +161,7 @@
         <!-- Parametri facoltativi e metadati -->
         <div class="details-section">
           <button type="button" class="accordion-toggle" id="toggle-details">
-            <span>⚙️ Parametri Avanzati (Autore, Classe, Data, Nome Progetto)</span>
+            <span>⚙️ Dati Relazione (Autore, Classe, Data, Nome Cartella)</span>
             <span class="toggle-icon" id="toggle-icon">▼</span>
           </button>
 
@@ -164,7 +191,7 @@
 
               <div class="form-group flex-2">
                 <label for="field-argomenti">Argomenti Trattati (opzionale)</label>
-                <input type="text" id="field-argomenti" placeholder="Es. Bubble sort, passaggio parametri per riferimento, fstream, warning -Wconversion">
+                <input type="text" id="field-argomenti" placeholder="Es. Vettori, numeri casuali, ordinamento bubble sort, warning -Wconversion">
               </div>
             </div>
           </div>
@@ -172,9 +199,9 @@
 
         <!-- Submit button -->
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary btn-lg" id="btn-generate">
+          <button type="submit" class="btn btn-primary btn-lg btn-mobile-block" id="btn-generate">
             <span class="btn-icon">⚡</span>
-            <span>Risolvi con CopiaPicchio!</span>
+            <span>Risolvi Esercizio</span>
           </button>
         </div>
       </form>
@@ -185,7 +212,7 @@
       <div class="loading-header">
         <div class="spinner"></div>
         <h3>CopiaPicchio al lavoro...</h3>
-        <p>Gemini 3.1 Flash Lite sta elaborando l'esercizio e verificando il codice con g++.</p>
+        <p>Sviluppo dell'esercizio secondo la mappa didattica e compilazione con g++ -Wall -Wconversion.</p>
       </div>
 
       <div class="stepper">
@@ -195,7 +222,7 @@
         </div>
         <div class="step-item" id="step-2">
           <div class="step-icon">🧠</div>
-          <div class="step-label">2. Generazione Codice C++ a 3 File & Makefile</div>
+          <div class="step-label">2. Architettura C++ a 3 File & Makefile</div>
         </div>
         <div class="step-item" id="step-3">
           <div class="step-icon">⚙️</div>
@@ -207,7 +234,7 @@
         </div>
         <div class="step-item" id="step-5">
           <div class="step-icon">📝</div>
-          <div class="step-label">5. Redazione Relazione README.md & INSTALL.md</div>
+          <div class="step-label">5. Redazione Relazione Dettagliata README.md</div>
         </div>
       </div>
     </section>
@@ -216,23 +243,25 @@
     <section class="card results-card hidden" id="results-section">
       <div class="results-header">
         <div class="results-meta">
-          <span class="badge badge-success" id="badge-compilation">
-            ✓ Compilazione g++: 0 Errori, 0 Warning
-          </span>
-          <span class="badge badge-info" id="badge-project-name">
-            📁 cartella: <strong id="res-folder-name">progetto</strong>
-          </span>
+          <div class="meta-badges">
+            <span class="badge badge-success" id="badge-compilation">
+              ✓ Compilazione g++: 0 Errori, 0 Warning
+            </span>
+            <span class="badge badge-info" id="badge-project-name">
+              📁 cartella: <strong id="res-folder-name">progetto</strong>
+            </span>
+          </div>
           <h2 id="res-project-title">Esercizio Risolto</h2>
         </div>
 
         <div class="results-actions">
-          <button class="btn btn-secondary" id="btn-copy-readme">
+          <button class="btn btn-secondary btn-sm" id="btn-copy-readme">
             <span>📋 Copia Relazione</span>
           </button>
-          <button class="btn btn-secondary" id="btn-print-doc">
+          <button class="btn btn-secondary btn-sm" id="btn-print-doc">
             <span>🖨️ Stampa / Salva PDF</span>
           </button>
-          <a href="#" class="btn btn-primary" id="btn-download-zip" download>
+          <a href="#" class="btn btn-primary btn-sm" id="btn-download-zip" download>
             <span>📦 Scarica Progetto (.ZIP)</span>
           </a>
         </div>
@@ -346,8 +375,7 @@
 
   <footer class="app-footer">
     <div class="container footer-content">
-      <p><strong>CopiaPicchio!</strong> — Risolutore Esercizi C++ con Gemini 3.1 Flash Lite & g++ locale.</p>
-      <p class="footer-note">Genera codice a 3 file, makefile, INSTALL.md e relazione README.md conforme agli standard scolastici.</p>
+      <p><strong>CopiaPicchio!</strong></p>
     </div>
   </footer>
 

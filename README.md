@@ -1,7 +1,6 @@
 # 🦜 CopiaPicchio!
 
-> **Risolutore Didattico per Compiti ed Esercizi di Informatica C++**  
-> Alimentato da **Gemini 3.1 Flash Lite** e verificato in locale con **g++ -Wall -Wconversion**.
+> Generatore intelligente di compiti e progetti di informatica C++ basato su **Gemini 3.1 Flash Lite** e conforme alla mappa didattica della classe 3B IT.
 
 ---
 

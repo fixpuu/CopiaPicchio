@@ -15,6 +15,12 @@ a.out
 .env.local
 config.json
 
+# Local database files
+data/*.json
+
+# Student external archive
+references/papa_diemoz/
+
 # OS files
 .DS_Store
 Thumbs.db
