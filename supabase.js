@@ -32,8 +32,12 @@ if (SUPABASE_URL && SUPABASE_KEY) {
   }
 }
 
-// Fallback locale per crediti (data/credits.json)
-const CREDITS_FILE = path.join(__dirname, 'data', 'credits.json');
+const os = require('os');
+
+// Fallback locale per crediti (data/credits.json o /tmp su Vercel)
+const CREDITS_FILE = process.env.VERCEL
+  ? path.join(os.tmpdir(), 'copiapicchio-data', 'credits.json')
+  : path.join(__dirname, 'data', 'credits.json');
 let localCredits = {};
 try {
   if (fs.existsSync(CREDITS_FILE)) {

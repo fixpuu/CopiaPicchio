@@ -9,6 +9,9 @@
   },
   "keywords": [],
   "type": "commonjs",
+  "engines": {
+    "node": ">=22.x"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
     "archiver": "^8.0.0",

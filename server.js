@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const cookieParser = require('cookie-parser');
-const { ZipArchive } = require('archiver');
+const archiver = require('archiver');
 const crypto = require('crypto');
 
 const { generateExercise, fixExerciseCode, formatComprehensiveReadme } = require('./gemini');
@@ -13,7 +13,7 @@ const supabaseModule = require('./supabase');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const COOKIE_SECRET = 'copiapicchio-secret-key-2026';
+const COOKIE_SECRET = process.env.COOKIE_SECRET || 'copiapicchio-secret-key-2026';
 
 // Credenziali locali autorizzate (fallback prima di configurare SUPABASE_URL)
 const USERS = {
@@ -35,6 +35,26 @@ app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 app.use(cookieParser(COOKIE_SECRET));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Endpoint di stato e verifica configurazione
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    app: 'CopiaPicchio',
+    uptime: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+    supabaseConfigured: supabaseModule.isConfigured()
+  });
+});
+
+// Fallback per root (se eseguito come server monolitico o invocato direttamente)
+app.get('/', (req, res) => {
+  const indexPath = path.join(__dirname, 'public', 'index.html');
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+  return res.json({ name: 'CopiaPicchio API', status: 'running' });
+});
 
 // Middleware di autenticazione (supporta cookie o header x-session-token da localStorage)
 function requireAuth(req, res, next) {
@@ -453,7 +473,7 @@ app.get('/api/download-zip/:id', requireAuth, (req, res) => {
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="${projectName}.zip"`);
 
-  const archive = new ZipArchive({ zlib: { level: 9 } });
+  const archive = archiver('zip', { zlib: { level: 9 } });
 
   archive.on('error', (err) => {
     console.error('[Archiver Error]', err);

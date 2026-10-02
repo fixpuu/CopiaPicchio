@@ -74,13 +74,15 @@ Il progetto include già la configurazione per Vercel:
 - `api/index.js`: entrypoint serverless Express.
 
 ### Variabili d'Ambiente su Vercel
-Nel pannello **Vercel -> Settings -> Environment Variables**, imposta:
+Nel pannello del tuo progetto su **Vercel -> Settings -> Environment Variables**, aggiungi le seguenti chiavi (seleziona per tutti gli ambienti: *Production*, *Preview*, *Development*):
 
-| Variabile | Descrizione |
-|---|---|
-| `GEMINI_API_KEY` | Chiave API di Gemini (`AQ.Ab...`) |
-| `SUPABASE_URL` | `https://zeyffbpgthektssiqlmt.supabase.co` |
-| `SUPABASE_KEY` | La tua Secret Key di Supabase (`sb_secret_...`) |
+| Nome Variabile (Key) | Valore Richiesto (Value) | Descrizione |
+|---|---|---|
+| `GEMINI_API_KEY` | `AIzaSy...` | Chiave API di Google Gemini (da [Google AI Studio](https://aistudio.google.com/app/apikey)) |
+| `SUPABASE_URL` | `https://tuoprogetto.supabase.co` | URL del progetto Supabase (da Project Settings -> Data API -> Project URL) |
+| `SUPABASE_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6...` | **Chiave Segreta `service_role` (Secret)** di Supabase (da Project Settings -> Data API -> Project API keys -> `service_role`). **Nota:** NON usare la chiave `anon`! |
+
+*(Opzionale: `COOKIE_SECRET` con una stringa casuale a scelta).*
 
 ---
 
