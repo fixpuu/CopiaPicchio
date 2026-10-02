@@ -22,7 +22,7 @@ const { generateExercise, fixExerciseCode, formatComprehensiveReadme } = require
 const { testProjectCompilation, ensureMakefileTabs, formatCppWithTabs } = require('./compiler');
 const compitiManager = require('./data/compitiManager');
 const supabaseModule = require('./supabase');
-const resendModule = require('./resend');
+const mailgunModule = require('./mailgun');
 const paymentsModule = require('./payments');
 
 const app = express();
@@ -266,8 +266,8 @@ app.post('/api/auth/register-request', async (req, res) => {
       attempts: 0
     });
 
-    // Invia OTP via Resend
-    const sendResult = await resendModule.sendOtpEmail({
+    // Invia OTP via Mailgun
+    const sendResult = await mailgunModule.sendOtpEmail({
       to: cleanEmail,
       otp,
       username: cleanUsername
@@ -408,7 +408,7 @@ app.post('/api/auth/resend-otp', async (req, res) => {
     pending.createdAt = Date.now();
     pending.attempts = 0;
 
-    const sendResult = await resendModule.sendOtpEmail({
+    const sendResult = await mailgunModule.sendOtpEmail({
       to: cleanEmail,
       otp: newOtp,
       username: pending.username
@@ -436,18 +436,17 @@ app.get('/api/payments/config', (req, res) => {
   });
 });
 
-// Crea ordine pagamento (PayPal / Instant alternative)
+// Crea ordine pagamento Revolut
 app.post('/api/payments/create-order', requireAuth, async (req, res) => {
   try {
-    const { packageId, paymentMethod } = req.body;
+    const { packageId } = req.body;
     if (!packageId) {
       return res.status(400).json({ error: 'Seleziona un pacchetto crediti.' });
     }
 
     const order = await paymentsModule.createPaymentOrder({
       packageId,
-      user: req.user,
-      paymentMethod: paymentMethod || 'paypal'
+      user: req.user
     });
 
     res.json({ success: true, order });
@@ -457,25 +456,26 @@ app.post('/api/payments/create-order', requireAuth, async (req, res) => {
   }
 });
 
-// Cattura e accredita crediti all'account
-app.post('/api/payments/capture-order', requireAuth, async (req, res) => {
+// Registra notifica di invio pagamento Revolut (in attesa di verifica admin)
+app.post('/api/payments/submit-recharge', requireAuth, async (req, res) => {
   try {
-    const { orderId, packageId, paymentMethod } = req.body;
-    if (!orderId || !packageId) {
-      return res.status(400).json({ error: 'Parametri d\'ordine mancanti.' });
+    const { orderId, packageId, reference, senderNote } = req.body;
+    if (!packageId || !reference) {
+      return res.status(400).json({ error: 'Parametri d\'ordine o causale mancanti.' });
     }
 
-    const result = await paymentsModule.captureAndFulfillPayment({
+    const result = await paymentsModule.submitRechargeRequest({
       orderId,
       packageId,
       user: req.user,
-      paymentMethod: paymentMethod || 'paypal'
+      reference,
+      senderNote
     });
 
     res.json(result);
   } catch (err) {
-    console.error('[Payment Capture Error]', err);
-    res.status(500).json({ error: `Errore finalizzazione pagamento: ${err.message}` });
+    console.error('[Payment Submit Recharge Error]', err);
+    res.status(500).json({ error: `Errore registrazione ricarica: ${err.message}` });
   }
 });
 
@@ -643,6 +643,44 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: `Errore eliminazione utente: ${err.message}` });
+  }
+});
+
+// Admin: Elenco ricariche
+app.get('/api/admin/recharges', requireAdmin, async (req, res) => {
+  try {
+    const recharges = await paymentsModule.listAllRecharges();
+    res.json({ success: true, recharges });
+  } catch (err) {
+    res.status(500).json({ error: `Errore caricamento ricariche: ${err.message}` });
+  }
+});
+
+// Admin: Approva ricarica e accredita crediti
+app.post('/api/admin/recharges/:id/approve', requireAdmin, async (req, res) => {
+  try {
+    const result = await paymentsModule.approveRecharge({
+      requestId: req.params.id,
+      adminUser: req.user
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: `Errore approvazione ricarica: ${err.message}` });
+  }
+});
+
+// Admin: Rifiuta ricarica
+app.post('/api/admin/recharges/:id/reject', requireAdmin, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const result = await paymentsModule.rejectRecharge({
+      requestId: req.params.id,
+      adminUser: req.user,
+      reason
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: `Errore rifiuto ricarica: ${err.message}` });
   }
 });
 

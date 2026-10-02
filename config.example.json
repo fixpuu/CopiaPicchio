@@ -1,11 +1,11 @@
 {
-  "GEMINI_API_KEY": "TUO_GEMINI_API_KEY",
+  "GEMINI_API_KEY": "la_tua_chiave_google_ai_gemini",
   "SUPABASE_URL": "https://xyzcompany.supabase.co",
-  "SUPABASE_KEY": "TUO_SUPABASE_SECRET_KEY",
+  "SUPABASE_KEY": "tuo_supabase_service_role_secret_key",
   "ADMIN_USERS": ["matty", "zome"],
-  "RESEND_API_KEY": "re_...",
-  "RESEND_FROM": "CopiaPicchio <onboarding@resend.dev>",
+  "MAILGUN_API_KEY": "tua_chiave_api_mailgun",
+  "MAILGUN_DOMAIN": "tuo_dominio_o_sandbox.mailgun.org",
+  "MAILGUN_FROM": "CopiaPicchio <postmaster@tuo_dominio.mailgun.org>",
   "PAYMENT_PROVIDER": "revolut",
-  "REVOLUT_TAG": "tuo_revtag",
-  "PAYPAL_CLIENT_ID": "sb"
+  "REVOLUT_TAG": "tuo_revtag"
 }

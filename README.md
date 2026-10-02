@@ -89,9 +89,13 @@ Nel pannello del tuo progetto su **Vercel -> Settings -> Environment Variables**
 
 | Nome Variabile (Key) | Valore Richiesto (Value) | Descrizione |
 |---|---|---|
-| `GEMINI_API_KEY` | `AIzaSy...` | Chiave API di Google Gemini (da [Google AI Studio](https://aistudio.google.com/app/apikey)) |
-| `SUPABASE_URL` | `https://tuoprogetto.supabase.co` | URL del progetto Supabase (da Project Settings -> Data API -> Project URL) |
-| `SUPABASE_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6...` | **Chiave Segreta `service_role` (Secret)** di Supabase (da Project Settings -> Data API -> Project API keys -> `service_role`). **Nota:** NON usare la chiave `anon`! |
+| `GEMINI_API_KEY` | `AQ.Ab8...` | Chiave API di Google Gemini |
+| `SUPABASE_URL` | `https://zeyffbpgthektssiqlmt.supabase.co` | URL del progetto Supabase |
+| `SUPABASE_KEY` | `sb_secret_...` | Chiave Segreta `service_role` (Secret) di Supabase |
+| `MAILGUN_API_KEY` | `la_tua_chiave_mailgun` | Chiave API Mailgun per invio email OTP |
+| `MAILGUN_DOMAIN` | `sandbox7641c41742c7440abec3e881f3aa2b49.mailgun.org` | Dominio sandbox o personalizzato Mailgun |
+| `MAILGUN_FROM` | `CopiaPicchio <postmaster@sandbox7641c41742c7440abec3e881f3aa2b49.mailgun.org>` | Indirizzo mittente email |
+| `REVOLUT_TAG` | `maurizzx9a` | Il tuo Revtag Revolut (per link di pagamento revolut.me) |
 
 *(Opzionale: `COOKIE_SECRET` con una stringa casuale a scelta).*
 

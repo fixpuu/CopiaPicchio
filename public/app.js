@@ -69,9 +69,11 @@ const modalCurrentCredits = document.getElementById('modal-current-credits');
 const packagesGrid = document.getElementById('packages-grid');
 const selectedPackageLabel = document.getElementById('selected-package-label');
 const selectedPackagePrice = document.getElementById('selected-package-price');
-const btnPayPaypal = document.getElementById('btn-pay-paypal');
-const btnPayInstant = document.getElementById('btn-pay-instant');
+const revolutDirectLink = document.getElementById('revolut-direct-link');
+const revolutSenderNote = document.getElementById('revolut-sender-note');
 const paymentStatusBox = document.getElementById('payment-status-box');
+const adminRechargesTbody = document.getElementById('admin-recharges-tbody');
+const btnAdminRefreshRecharges = document.getElementById('btn-admin-refresh-recharges');
 
 // Admin Elements
 const createUserModal = document.getElementById('create-user-modal');
@@ -548,7 +550,7 @@ creditsPill?.addEventListener('click', showCreditsModal);
 btnBannerRecharge?.addEventListener('click', showCreditsModal);
 btnCloseCreditsModal?.addEventListener('click', hideCreditsModal);
 
-// Pagamento 1: Revolut Pay & Carte (Accredito Automatico)
+// Pagamento Revolut Pay & Tutte le Carte
 btnPayRevolut?.addEventListener('click', async () => {
   if (!selectedPackage) return;
   if (!currentUser) {
@@ -557,15 +559,17 @@ btnPayRevolut?.addEventListener('click', async () => {
     return;
   }
 
-  setPaymentLoading(true, 'Generazione link di pagamento protetto...');
+  // Apri la nuova scheda IMMEDIATAMENTE durante il click per non essere bloccati dal popup-blocker
+  const payWindow = window.open('about:blank', '_blank');
+
+  setPaymentLoading(true, 'Generazione link protetto Revolut...');
 
   try {
     const orderRes = await apiFetch('/api/payments/create-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        packageId: selectedPackage.id,
-        paymentMethod: 'revolut'
+        packageId: selectedPackage.id
       })
     });
 
@@ -573,6 +577,7 @@ btnPayRevolut?.addEventListener('click', async () => {
     setPaymentLoading(false);
 
     if (!orderRes.ok || !orderData.success) {
+      if (payWindow) payWindow.close();
       throw new Error(orderData.error || 'Errore creazione ordine.');
     }
 
@@ -581,63 +586,71 @@ btnPayRevolut?.addEventListener('click', async () => {
       orderId,
       packageId: selectedPackage.id,
       reference,
-      paymentMethod: 'revolut'
+      paymentUrl
     };
 
-    // Apre la pagina di pagamento sicura Revolut (accetta Apple Pay, Google Pay e Carte)
-    if (paymentUrl) {
-      window.open(paymentUrl, '_blank');
+    // Reindirizza la scheda aperta su revolut.me
+    if (payWindow && paymentUrl) {
+      payWindow.location.href = paymentUrl;
     }
 
-    // Mostra il pannello di conferma immediata dei crediti
+    // Aggiorna anche il link diretto di fallback nel modal
+    if (revolutDirectLink && paymentUrl) {
+      revolutDirectLink.href = paymentUrl;
+      revolutDirectLink.innerHTML = `<span>🔗 Apri Revolut.me (€${selectedPackage.price.toFixed(2)})</span>`;
+    }
+
+    // Mostra il pannello di conferma nel modal
     paymentButtonsStack?.classList.add('hidden');
     revolutConfirmBox?.classList.remove('hidden');
     if (revolutRefCode) revolutRefCode.textContent = reference || `CP-${orderId.slice(-4)}`;
+    if (revolutSenderNote) revolutSenderNote.value = '';
 
-    showToast('Scheda Revolut aperta. Completa il pagamento e conferma!', 'info');
+    showToast('Scheda Revolut aperta! Effettua il pagamento e invia la notifica.', 'info');
 
   } catch (err) {
+    if (payWindow) payWindow.close();
     setPaymentLoading(false);
     showToast(`Errore: ${err.message}`, 'error');
   }
 });
 
-// Conferma accredito dopo pagamento Revolut
+// Conferma invio pagamento Revolut (Invia richiesta all'Admin)
 btnRevolutConfirmDone?.addEventListener('click', async () => {
   if (!pendingRevolutPayment) return;
 
+  const senderNote = (revolutSenderNote?.value || '').trim();
+
   btnRevolutConfirmDone.disabled = true;
-  btnRevolutConfirmDone.querySelector('span').textContent = 'Accredito crediti in corso...';
+  btnRevolutConfirmDone.querySelector('span').textContent = 'Registrazione notifica in corso...';
 
   try {
-    const captureRes = await apiFetch('/api/payments/capture-order', {
+    const rechargeRes = await apiFetch('/api/payments/submit-recharge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         orderId: pendingRevolutPayment.orderId,
         packageId: pendingRevolutPayment.packageId,
-        paymentMethod: pendingRevolutPayment.paymentMethod,
-        reference: pendingRevolutPayment.reference
+        reference: pendingRevolutPayment.reference,
+        senderNote
       })
     });
 
-    const captureData = await captureRes.json();
+    const rechargeData = await rechargeRes.json();
     btnRevolutConfirmDone.disabled = false;
-    btnRevolutConfirmDone.querySelector('span').textContent = '✓ Ho pagato: Accredita i Miei Crediti';
+    btnRevolutConfirmDone.querySelector('span').textContent = '✓ Ho inviato il pagamento: Registra Ricarica';
 
-    if (!captureRes.ok || !captureData.success) {
-      throw new Error(captureData.error || 'Errore durante l\'accredito.');
+    if (!rechargeRes.ok || !rechargeData.success) {
+      throw new Error(rechargeData.error || 'Errore durante la registrazione della ricarica.');
     }
 
-    // Accredito riuscito!
-    updateCreditsUI(captureData.newTotalCredits, currentUser.isAdmin);
     hideCreditsModal();
-    showToast(`🎉 Ricarica completata! +${captureData.creditsAdded} crediti aggiunti al tuo account.`, 'success');
+    showToast(`✅ Richiesta inviata! L'amministratore verificherà l'accredito Revolut (Rif: ${pendingRevolutPayment.reference}) e attiverà i tuoi crediti a breve.`, 'success', 8000);
 
   } catch (err) {
     btnRevolutConfirmDone.disabled = false;
-    btnRevolutConfirmDone.querySelector('span').textContent = '✓ Ho pagato: Accredita i Miei Crediti';
-    showToast(`Errore accredito: ${err.message}`, 'error');
+    btnRevolutConfirmDone.querySelector('span').textContent = '✓ Ho inviato il pagamento: Registra Ricarica';
+    showToast(`Errore: ${err.message}`, 'error');
   }
 });
 
@@ -645,81 +658,8 @@ btnRevolutCancelStep?.addEventListener('click', () => {
   resetPaymentModalView();
 });
 
-// Pagamento 2: PayPal Opzionale
-btnPayPaypal?.addEventListener('click', async () => {
-  if (!selectedPackage) return;
-  await processPayment('paypal');
-});
-
-// Pagamento 3: Demo / Test Accredito Istantaneo
-btnPayInstant?.addEventListener('click', async () => {
-  if (!selectedPackage) return;
-  await processPayment('instant_sandbox');
-});
-
-async function processPayment(paymentMethod) {
-  if (!currentUser) {
-    showToast('Effettua il login per acquistare crediti.', 'error');
-    showAuthModal();
-    return;
-  }
-
-  setPaymentLoading(true, 'Creazione ordine di pagamento in corso...');
-
-  try {
-    const orderRes = await apiFetch('/api/payments/create-order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        packageId: selectedPackage.id,
-        paymentMethod
-      })
-    });
-
-    const orderData = await orderRes.json();
-    if (!orderRes.ok || !orderData.success) {
-      throw new Error(orderData.error || 'Errore creazione ordine.');
-    }
-
-    const { orderId } = orderData.order;
-
-    setPaymentLoading(true, `Accredito di ${selectedPackage.credits} crediti in corso...`);
-
-    const captureRes = await apiFetch('/api/payments/capture-order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        orderId,
-        packageId: selectedPackage.id,
-        paymentMethod
-      })
-    });
-
-    const captureData = await captureRes.json();
-    setPaymentLoading(false);
-
-    if (!captureRes.ok || !captureData.success) {
-      throw new Error(captureData.error || 'Errore elaborazione accredito.');
-    }
-
-    updateCreditsUI(captureData.newTotalCredits, currentUser.isAdmin);
-    hideCreditsModal();
-    showToast(`🎉 Ricarica completata! +${captureData.creditsAdded} crediti aggiunti al tuo account.`, 'success');
-
-  } catch (err) {
-    setPaymentLoading(false);
-    showToast(`Errore pagamento: ${err.message}`, 'error');
-    if (paymentStatusBox) {
-      paymentStatusBox.textContent = `Avviso: ${err.message}`;
-      paymentStatusBox.classList.remove('hidden');
-    }
-  }
-}
-
 function setPaymentLoading(isLoading, msg) {
   if (btnPayRevolut) btnPayRevolut.disabled = isLoading;
-  if (btnPayPaypal) btnPayPaypal.disabled = isLoading;
-  if (btnPayInstant) btnPayInstant.disabled = isLoading;
   if (paymentStatusBox) {
     if (isLoading) {
       paymentStatusBox.textContent = msg || 'Elaborazione...';
@@ -1276,6 +1216,7 @@ async function loadAdminUsers() {
     adminUsersList = data.users || [];
     updateAdminStats(adminUsersList);
     renderAdminUsersTable(adminUsersList);
+    loadAdminRecharges();
   } catch (err) {
     showToast(`Errore admin: ${err.message}`, 'error');
   }
@@ -1433,6 +1374,124 @@ if (adminSearchUsers) {
 btnAdminRefresh?.addEventListener('click', () => {
   loadAdminUsers();
   showToast('Dati admin aggiornati', 'info');
+});
+
+// ================= GESTIONE RICARICHE REVOLUT ADMIN =================
+
+let adminRechargesList = [];
+
+async function loadAdminRecharges() {
+  if (!currentUser?.isAdmin) return;
+  try {
+    const res = await apiFetch('/api/admin/recharges');
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Impossibile caricare le ricariche.');
+    }
+    adminRechargesList = data.recharges || [];
+    renderAdminRecharges(adminRechargesList);
+  } catch (err) {
+    console.warn('[Admin Recharges Error]:', err.message);
+  }
+}
+
+function renderAdminRecharges(list) {
+  if (!adminRechargesTbody) return;
+  if (!list || list.length === 0) {
+    adminRechargesTbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-dim);">
+          Nessuna richiesta di ricarica registrata al momento.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  adminRechargesTbody.innerHTML = list.map(r => {
+    const isPending = r.status === 'pending';
+    const isApproved = r.status === 'approved';
+    const dateStr = r.createdAt ? new Date(r.createdAt).toLocaleString('it-IT', {
+      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+    }) : '-';
+
+    let statusBadge = '<span class="role-badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">In Attesa</span>';
+    if (isApproved) {
+      statusBadge = '<span class="role-badge" style="background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3);">Approvato</span>';
+    } else if (r.status === 'rejected') {
+      statusBadge = '<span class="role-badge" style="background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3);">Rifiutato</span>';
+    }
+
+    return `
+      <tr data-recharge-id="${escapeHtml(r.id)}">
+        <td style="font-size: 0.8rem; color: var(--text-muted);">${dateStr}</td>
+        <td>
+          <div class="user-cell">
+            <span class="user-email">${escapeHtml(r.userEmail || '')}</span>
+            <span class="user-sub">@${escapeHtml(r.username || '')}</span>
+          </div>
+        </td>
+        <td><strong>${escapeHtml(r.packageName || '')}</strong> (+${r.credits} crediti)</td>
+        <td><strong style="color: var(--primary);">€${Number(r.amount).toFixed(2)}</strong></td>
+        <td><code style="background: rgba(59,130,246,0.15); color: #60a5fa; padding: 2px 6px; border-radius: 4px; font-weight: bold;">${escapeHtml(r.reference || '')}</code></td>
+        <td style="font-size: 0.82rem; color: var(--text-muted);">${escapeHtml(r.senderNote || '-')}</td>
+        <td>${statusBadge}</td>
+        <td>
+          ${isPending ? `
+            <div class="btn-action-group">
+              <button type="button" class="btn-credit-pill-act green" onclick="handleApproveRecharge('${escapeHtml(r.id)}')" title="Approva e accredita i crediti">✓ Approva (+${r.credits})</button>
+              <button type="button" class="btn-credit-pill-act amber" onclick="handleRejectRecharge('${escapeHtml(r.id)}')" title="Rifiuta">✕ Rifiuta</button>
+            </div>
+          ` : `<span style="font-size: 0.78rem; color: var(--text-dim);">${isApproved ? 'Accreditato' : 'Respinto'}</span>`}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+window.handleApproveRecharge = async function(id) {
+  if (!confirm('Hai controllato la ricezione dell\'importo sul tuo conto Revolut e confermi l\'accredito dei crediti all\'utente?')) {
+    return;
+  }
+  try {
+    const res = await apiFetch(`/api/admin/recharges/${id}/approve`, {
+      method: 'POST'
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Errore durante l\'approvazione');
+    }
+    showToast(`✅ ${data.message}`, 'success');
+    loadAdminRecharges();
+    loadAdminUsers();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+window.handleRejectRecharge = async function(id) {
+  const reason = prompt('Motivo del rifiuto (opzionale):', 'Pagamento non ricevuto su Revolut');
+  if (reason === null) return;
+  try {
+    const res = await apiFetch(`/api/admin/recharges/${id}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Errore');
+    }
+    showToast('Richiesta contrassegnata come rifiutata', 'info');
+    loadAdminRecharges();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+btnAdminRefreshRecharges?.addEventListener('click', () => {
+  loadAdminRecharges();
+  showToast('Ricariche Revolut aggiornate', 'info');
 });
 
 btnAdminAddUser?.addEventListener('click', () => {
