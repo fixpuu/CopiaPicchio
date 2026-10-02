@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
-    "archiver": "^8.0.0",
+    "archiver": "^7.0.1",
     "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
     "multer": "^2.4.0"

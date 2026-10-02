@@ -3,8 +3,20 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const cookieParser = require('cookie-parser');
-const archiver = require('archiver');
 const crypto = require('crypto');
+
+// Caricamento dinamico / lazy per archiver per evitare problemi di import ESM/CJS su serverless Vercel
+let _archiver = null;
+async function getArchiver() {
+  if (_archiver) return _archiver;
+  try {
+    _archiver = require('archiver');
+  } catch (err) {
+    const esmMod = await import('archiver');
+    _archiver = esmMod.default || esmMod;
+  }
+  return _archiver;
+}
 
 const { generateExercise, fixExerciseCode, formatComprehensiveReadme } = require('./gemini');
 const { testProjectCompilation, ensureMakefileTabs, formatCppWithTabs } = require('./compiler');
@@ -455,7 +467,7 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
 
 // ================= API DOWNLOAD PROGETTO ZIP =================
 
-app.get('/api/download-zip/:id', requireAuth, (req, res) => {
+app.get('/api/download-zip/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   
   let projectEntry = generatedProjects.get(id);
@@ -469,6 +481,14 @@ app.get('/api/download-zip/:id', requireAuth, (req, res) => {
 
   const { project } = projectEntry;
   const projectName = project.nome_progetto || 'progetto_copiapicchio';
+
+  let archiver;
+  try {
+    archiver = await getArchiver();
+  } catch (err) {
+    console.error('[Archiver Load Error]', err);
+    return res.status(500).json({ error: 'Modulo di compressione ZIP non disponibile.' });
+  }
 
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="${projectName}.zip"`);
