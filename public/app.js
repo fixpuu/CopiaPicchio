@@ -5,14 +5,43 @@ let currentProjectId = null;
 let selectedPhotoFile = null;
 let sessionToken = localStorage.getItem('cp_session_token') || null;
 
-// Auth Elements
+// Auth State & Elements
+let pendingRegistrationEmail = null;
+let resendTimerInterval = null;
+
 const authModal = document.getElementById('auth-modal');
+const authModalTitle = document.getElementById('auth-modal-title');
+const authModalSubtitle = document.getElementById('auth-modal-subtitle');
+const tabBtnLogin = document.getElementById('tab-btn-login');
+const tabBtnRegister = document.getElementById('tab-btn-register');
+const linkToRegister = document.getElementById('link-to-register');
+const linkToLogin = document.getElementById('link-to-login');
+
 const loginForm = document.getElementById('login-form');
 const loginUsernameInput = document.getElementById('login-username');
 const loginPasswordInput = document.getElementById('login-password');
 const loginError = document.getElementById('login-error');
 const currentUsernameDisplay = document.getElementById('current-username');
+const avatarText = document.getElementById('avatar-text');
 const btnLogout = document.getElementById('btn-logout');
+
+const registerForm = document.getElementById('register-form');
+const registerEmailInput = document.getElementById('register-email');
+const registerUsernameInput = document.getElementById('register-username');
+const registerPasswordInput = document.getElementById('register-password');
+const registerError = document.getElementById('register-error');
+const btnRegisterSubmit = document.getElementById('btn-register-submit');
+
+const otpVerifyForm = document.getElementById('otp-verify-form');
+const otpDisplayEmail = document.getElementById('otp-display-email');
+const otpSandboxBanner = document.getElementById('otp-sandbox-banner');
+const otpSandboxText = document.getElementById('otp-sandbox-text');
+const otpCodeInput = document.getElementById('otp-code-input');
+const otpVerifyError = document.getElementById('otp-verify-error');
+const btnOtpVerifySubmit = document.getElementById('btn-otp-verify-submit');
+const btnResendOtp = document.getElementById('btn-resend-otp');
+const otpCooldownTimer = document.getElementById('otp-cooldown-timer');
+const btnBackToRegister = document.getElementById('btn-back-to-register');
 
 // Navigation Tabs & Sections
 const navBtnNuovo = document.getElementById('nav-btn-nuovo');
@@ -25,17 +54,26 @@ const adminSection = document.getElementById('admin-section');
 const compitiList = document.getElementById('compiti-list');
 const btnCompitiNuovo = document.getElementById('btn-compiti-nuovo');
 
-// Credits & Banners
+// Credits & Payment Shop Elements (Alternativa a Stripe)
+let availablePackages = [];
+let selectedPackage = null;
+
 const creditsPill = document.getElementById('credits-pill');
 const userCreditsVal = document.getElementById('user-credits-val');
 const bannerZeroCredits = document.getElementById('banner-zero-credits');
 const btnBannerRecharge = document.getElementById('btn-banner-recharge');
 
-// Modals
 const creditsModal = document.getElementById('credits-modal');
 const btnCloseCreditsModal = document.getElementById('btn-close-credits-modal');
-const btnDismissCredits = document.getElementById('btn-dismiss-credits');
+const modalCurrentCredits = document.getElementById('modal-current-credits');
+const packagesGrid = document.getElementById('packages-grid');
+const selectedPackageLabel = document.getElementById('selected-package-label');
+const selectedPackagePrice = document.getElementById('selected-package-price');
+const btnPayPaypal = document.getElementById('btn-pay-paypal');
+const btnPayInstant = document.getElementById('btn-pay-instant');
+const paymentStatusBox = document.getElementById('payment-status-box');
 
+// Admin Elements
 const createUserModal = document.getElementById('create-user-modal');
 const btnCloseCreateUser = document.getElementById('btn-close-create-user');
 const btnCancelCreateUser = document.getElementById('btn-cancel-create-user');
@@ -46,7 +84,6 @@ const newUserName = document.getElementById('new-user-username');
 const newUserCredits = document.getElementById('new-user-credits');
 const createUserError = document.getElementById('create-user-error');
 
-// Admin Elements
 const adminStatUsers = document.getElementById('admin-stat-users');
 const adminStatCredits = document.getElementById('admin-stat-credits');
 const adminStatZero = document.getElementById('admin-stat-zero');
@@ -102,7 +139,7 @@ const fileTreeList = document.getElementById('file-tree-list');
 // Initialize date field to today DD/MM/YYYY
 const today = new Date();
 const formattedDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
-fieldData.value = formattedDate;
+if (fieldData) fieldData.value = formattedDate;
 
 // ================= API FETCH HELPER (WITH AUTO TOKEN) =================
 
@@ -152,21 +189,26 @@ function setAuthenticatedUser(userData, token) {
   if (token) localStorage.setItem('cp_session_token', token);
   localStorage.setItem('cp_username', username);
 
-  currentUsernameDisplay.textContent = username;
-  authModal.classList.add('hidden');
-
-  updateCreditsUI(credits, isAdmin);
-
-  // Mostra il pulsante admin se l'utente è uno dei 2 amministratori
-  if (isAdmin) {
-    navBtnAdmin.classList.remove('hidden');
-  } else {
-    navBtnAdmin.classList.add('hidden');
-    adminSection.classList.add('hidden');
+  if (currentUsernameDisplay) currentUsernameDisplay.textContent = username;
+  if (avatarText) {
+    const initial = (username || 'U').charAt(0).toUpperCase();
+    avatarText.textContent = initial;
   }
 
-  // Carica i compiti dell'utente
+  authModal.classList.add('hidden');
+  updateCreditsUI(credits, isAdmin);
+
+  // Mostra il tab admin se l'utente è uno dei 2 amministratori
+  if (isAdmin) {
+    navBtnAdmin?.classList.remove('hidden');
+  } else {
+    navBtnAdmin?.classList.add('hidden');
+    adminSection?.classList.add('hidden');
+  }
+
+  // Carica archivio compiti dell'utente e opzioni pagamento
   loadCompiti();
+  loadPaymentConfig();
 }
 
 function updateCreditsUI(credits, isAdmin) {
@@ -175,13 +217,14 @@ function updateCreditsUI(credits, isAdmin) {
     currentUser.isAdmin = isAdmin;
   }
   const displayVal = isAdmin ? '∞' : (credits !== undefined ? credits : 0);
-  userCreditsVal.textContent = displayVal;
+  if (userCreditsVal) userCreditsVal.textContent = displayVal;
+  if (modalCurrentCredits) modalCurrentCredits.textContent = isAdmin ? 'Illimitati (Admin)' : `${displayVal} Crediti`;
 
   if (!isAdmin && credits <= 0) {
-    creditsPill.classList.add('zero');
+    creditsPill?.classList.add('zero');
     bannerZeroCredits?.classList.remove('hidden');
   } else {
-    creditsPill.classList.remove('zero');
+    creditsPill?.classList.remove('zero');
     bannerZeroCredits?.classList.add('hidden');
   }
 }
@@ -189,13 +232,43 @@ function updateCreditsUI(credits, isAdmin) {
 function showAuthModal() {
   currentUser = null;
   authModal.classList.remove('hidden');
-  navBtnAdmin.classList.add('hidden');
-  adminSection.classList.add('hidden');
+  switchToLoginView();
+  navBtnAdmin?.classList.add('hidden');
+  adminSection?.classList.add('hidden');
 }
 
-loginForm.addEventListener('submit', async (e) => {
+// Switching tra Login e Registrazione OTP
+function switchToLoginView() {
+  tabBtnLogin?.classList.add('active');
+  tabBtnRegister?.classList.remove('active');
+  loginForm?.classList.remove('hidden');
+  registerForm?.classList.add('hidden');
+  otpVerifyForm?.classList.add('hidden');
+  loginError?.classList.add('hidden');
+  if (authModalTitle) authModalTitle.textContent = 'Accedi a CopiaPicchio';
+  if (authModalSubtitle) authModalSubtitle.textContent = 'Risolutore didattico di informatica C++ ad alta fedeltà.';
+}
+
+function switchToRegisterView() {
+  tabBtnRegister?.classList.add('active');
+  tabBtnLogin?.classList.remove('active');
+  registerForm?.classList.remove('hidden');
+  loginForm?.classList.add('hidden');
+  otpVerifyForm?.classList.add('hidden');
+  registerError?.classList.add('hidden');
+  if (authModalTitle) authModalTitle.textContent = 'Crea Account Studente';
+  if (authModalSubtitle) authModalSubtitle.textContent = 'Registrati gratis con verifica OTP inviata tramite Resend.';
+}
+
+tabBtnLogin?.addEventListener('click', switchToLoginView);
+tabBtnRegister?.addEventListener('click', switchToRegisterView);
+linkToRegister?.addEventListener('click', (e) => { e.preventDefault(); switchToRegisterView(); });
+linkToLogin?.addEventListener('click', (e) => { e.preventDefault(); switchToLoginView(); });
+
+// Submit Login
+loginForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  loginError.classList.add('hidden');
+  loginError?.classList.add('hidden');
 
   const username = loginUsernameInput.value.trim();
   const password = loginPasswordInput.value;
@@ -221,7 +294,166 @@ loginForm.addEventListener('submit', async (e) => {
   }
 });
 
-btnLogout.addEventListener('click', async () => {
+// Submit Registrazione (Step 1: Invia OTP via Resend)
+registerForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  registerError?.classList.add('hidden');
+
+  const email = registerEmailInput.value.trim();
+  const username = registerUsernameInput.value.trim();
+  const password = registerPasswordInput.value;
+
+  btnRegisterSubmit.disabled = true;
+  btnRegisterSubmit.querySelector('span').textContent = 'Invio codice in corso...';
+
+  try {
+    const res = await fetch('/api/auth/register-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, username, password })
+    });
+
+    const data = await res.json();
+    btnRegisterSubmit.disabled = false;
+    btnRegisterSubmit.querySelector('span').textContent = 'Invia Codice OTP via Email';
+
+    if (!res.ok || !data.success) {
+      registerError.textContent = data.error || 'Impossibile inviare il codice OTP.';
+      registerError.classList.remove('hidden');
+      return;
+    }
+
+    // Passaggio a Step 2: Inserimento codice OTP
+    pendingRegistrationEmail = data.email || email;
+    registerForm.classList.add('hidden');
+    otpVerifyForm.classList.remove('hidden');
+    otpDisplayEmail.textContent = pendingRegistrationEmail;
+    otpCodeInput.value = '';
+    otpVerifyError.classList.add('hidden');
+
+    if (data.simulated && data.note) {
+      otpSandboxBanner.classList.remove('hidden');
+      otpSandboxText.textContent = data.note;
+      if (data.testOtp) {
+        otpCodeInput.value = data.testOtp;
+      }
+    } else {
+      otpSandboxBanner.classList.add('hidden');
+    }
+
+    startOtpCooldown(30);
+    showToast(`Codice OTP inviato a ${pendingRegistrationEmail}!`, 'success');
+    setTimeout(() => otpCodeInput.focus(), 200);
+
+  } catch (err) {
+    btnRegisterSubmit.disabled = false;
+    btnRegisterSubmit.querySelector('span').textContent = 'Invia Codice OTP via Email';
+    registerError.textContent = 'Errore di comunicazione con il server.';
+    registerError.classList.remove('hidden');
+  }
+});
+
+// Submit Verifica OTP (Step 2)
+otpVerifyForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  otpVerifyError?.classList.add('hidden');
+
+  const otp = otpCodeInput.value.trim();
+  if (!otp || otp.length !== 6) {
+    otpVerifyError.textContent = 'Inserisci il codice numerico a 6 cifre inviato via email.';
+    otpVerifyError.classList.remove('hidden');
+    return;
+  }
+
+  btnOtpVerifySubmit.disabled = true;
+  btnOtpVerifySubmit.querySelector('span').textContent = 'Verifica in corso...';
+
+  try {
+    const res = await fetch('/api/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingRegistrationEmail, otp })
+    });
+
+    const data = await res.json();
+    btnOtpVerifySubmit.disabled = false;
+    btnOtpVerifySubmit.querySelector('span').textContent = 'Verifica e Completa Registrazione';
+
+    if (!res.ok || !data.success) {
+      otpVerifyError.textContent = data.error || 'Codice OTP non valido o scaduto.';
+      otpVerifyError.classList.remove('hidden');
+      return;
+    }
+
+    // Registrazione avvenuta con successo
+    setAuthenticatedUser(data, data.sessionToken);
+    showToast('🎉 Registrazione completata! Hai ricevuto 1 credito omaggio.', 'success');
+
+  } catch (err) {
+    btnOtpVerifySubmit.disabled = false;
+    btnOtpVerifySubmit.querySelector('span').textContent = 'Verifica e Completa Registrazione';
+    otpVerifyError.textContent = 'Errore durante la verifica del codice.';
+    otpVerifyError.classList.remove('hidden');
+  }
+});
+
+// Reinvia Codice OTP
+btnResendOtp?.addEventListener('click', async () => {
+  if (!pendingRegistrationEmail) return;
+  try {
+    btnResendOtp.disabled = true;
+    const res = await fetch('/api/auth/resend-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingRegistrationEmail })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast('Nuovo codice OTP inviato via email!', 'info');
+      if (data.simulated && data.note) {
+        otpSandboxBanner.classList.remove('hidden');
+        otpSandboxText.textContent = data.note;
+        if (data.testOtp) otpCodeInput.value = data.testOtp;
+      }
+      startOtpCooldown(30);
+    } else {
+      showToast(data.error || 'Errore reinvio codice', 'error');
+      btnResendOtp.disabled = false;
+    }
+  } catch (err) {
+    showToast('Errore di connessione', 'error');
+    btnResendOtp.disabled = false;
+  }
+});
+
+function startOtpCooldown(seconds) {
+  if (resendTimerInterval) clearInterval(resendTimerInterval);
+  let remaining = seconds;
+  btnResendOtp.disabled = true;
+  otpCooldownTimer.classList.remove('hidden');
+  otpCooldownTimer.textContent = `(attendi ${remaining}s)`;
+
+  resendTimerInterval = setInterval(() => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(resendTimerInterval);
+      btnResendOtp.disabled = false;
+      otpCooldownTimer.classList.add('hidden');
+    } else {
+      otpCooldownTimer.textContent = `(attendi ${remaining}s)`;
+    }
+  }, 1000);
+}
+
+// Torna indietro da OTP a Registrazione
+btnBackToRegister?.addEventListener('click', () => {
+  if (resendTimerInterval) clearInterval(resendTimerInterval);
+  otpVerifyForm.classList.add('hidden');
+  registerForm.classList.remove('hidden');
+});
+
+// Logout
+btnLogout?.addEventListener('click', async () => {
   try {
     await apiFetch('/api/auth/logout', { method: 'POST' });
   } catch (_) {}
@@ -232,70 +464,310 @@ btnLogout.addEventListener('click', async () => {
   showToast('Disconnessione completata', 'success');
 });
 
-// ================= MODAL CREDITI & OWNER =================
+// ================= SHOP CREDITI & PAGAMENTI AUTOMATICI (ALTERNATIVA A STRIPE) =================
+
+async function loadPaymentConfig() {
+  try {
+    const res = await apiFetch('/api/payments/config');
+    const data = await res.json();
+    if (res.ok && data.success && Array.isArray(data.packages)) {
+      availablePackages = data.packages;
+      renderPackagesGrid(availablePackages);
+      // Seleziona il pacchetto "student" (popolare) come default
+      const defaultPkg = availablePackages.find(p => p.id === 'student') || availablePackages[0];
+      selectPackage(defaultPkg);
+    }
+  } catch (err) {
+    console.warn('[Payments] Avviso caricamento pacchetti:', err);
+  }
+}
+
+function renderPackagesGrid(packages) {
+  if (!packagesGrid) return;
+  packagesGrid.innerHTML = packages.map(pkg => `
+    <div class="package-card ${pkg.popular ? 'popular' : ''}" data-pkg-id="${pkg.id}" onclick="selectPackageById('${pkg.id}')">
+      ${pkg.badge ? `<span class="package-badge-tag">${escapeHtml(pkg.badge)}</span>` : ''}
+      <div class="package-name">${escapeHtml(pkg.name)}</div>
+      <div class="package-credits">${pkg.credits}</div>
+      <div class="package-credits-lbl">Crediti</div>
+      <div class="package-price">€${pkg.price.toFixed(2)}</div>
+    </div>
+  `).join('');
+}
+
+window.selectPackageById = function(id) {
+  const pkg = availablePackages.find(p => p.id === id);
+  if (pkg) selectPackage(pkg);
+};
+
+function selectPackage(pkg) {
+  selectedPackage = pkg;
+  document.querySelectorAll('.package-card').forEach(el => {
+    el.classList.toggle('selected', el.getAttribute('data-pkg-id') === pkg.id);
+  });
+
+  if (selectedPackageLabel) selectedPackageLabel.textContent = `${pkg.name} (${pkg.credits} crediti)`;
+  if (selectedPackagePrice) selectedPackagePrice.textContent = `€${pkg.price.toFixed(2)}`;
+  
+  const btnRevolutText = document.getElementById('btn-revolut-text');
+  if (btnRevolutText) {
+    btnRevolutText.textContent = `Paga €${pkg.price.toFixed(2)} con Carta o Revolut Pay`;
+  }
+}
+
+let pendingRevolutPayment = null;
+
+const paymentButtonsStack = document.getElementById('payment-buttons-stack');
+const revolutConfirmBox = document.getElementById('revolut-confirm-box');
+const revolutRefCode = document.getElementById('revolut-ref-code');
+const btnPayRevolut = document.getElementById('btn-pay-revolut');
+const btnRevolutConfirmDone = document.getElementById('btn-revolut-confirm-done');
+const btnRevolutCancelStep = document.getElementById('btn-revolut-cancel-step');
+
+function resetPaymentModalView() {
+  paymentButtonsStack?.classList.remove('hidden');
+  revolutConfirmBox?.classList.add('hidden');
+  paymentStatusBox?.classList.add('hidden');
+  pendingRevolutPayment = null;
+}
 
 function showCreditsModal() {
-  creditsModal.classList.remove('hidden');
+  resetPaymentModalView();
+  if (!selectedPackage && availablePackages.length > 0) {
+    selectPackage(availablePackages.find(p => p.id === 'student') || availablePackages[0]);
+  }
+  creditsModal?.classList.remove('hidden');
 }
 
 function hideCreditsModal() {
-  creditsModal.classList.add('hidden');
+  creditsModal?.classList.add('hidden');
+  resetPaymentModalView();
 }
 
-creditsPill.addEventListener('click', showCreditsModal);
+creditsPill?.addEventListener('click', showCreditsModal);
 btnBannerRecharge?.addEventListener('click', showCreditsModal);
 btnCloseCreditsModal?.addEventListener('click', hideCreditsModal);
-btnDismissCredits?.addEventListener('click', hideCreditsModal);
+
+// Pagamento 1: Revolut Pay & Carte (Accredito Automatico)
+btnPayRevolut?.addEventListener('click', async () => {
+  if (!selectedPackage) return;
+  if (!currentUser) {
+    showToast('Effettua il login per acquistare crediti.', 'error');
+    showAuthModal();
+    return;
+  }
+
+  setPaymentLoading(true, 'Generazione link di pagamento protetto...');
+
+  try {
+    const orderRes = await apiFetch('/api/payments/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        packageId: selectedPackage.id,
+        paymentMethod: 'revolut'
+      })
+    });
+
+    const orderData = await orderRes.json();
+    setPaymentLoading(false);
+
+    if (!orderRes.ok || !orderData.success) {
+      throw new Error(orderData.error || 'Errore creazione ordine.');
+    }
+
+    const { orderId, paymentUrl, reference } = orderData.order;
+    pendingRevolutPayment = {
+      orderId,
+      packageId: selectedPackage.id,
+      reference,
+      paymentMethod: 'revolut'
+    };
+
+    // Apre la pagina di pagamento sicura Revolut (accetta Apple Pay, Google Pay e Carte)
+    if (paymentUrl) {
+      window.open(paymentUrl, '_blank');
+    }
+
+    // Mostra il pannello di conferma immediata dei crediti
+    paymentButtonsStack?.classList.add('hidden');
+    revolutConfirmBox?.classList.remove('hidden');
+    if (revolutRefCode) revolutRefCode.textContent = reference || `CP-${orderId.slice(-4)}`;
+
+    showToast('Scheda Revolut aperta. Completa il pagamento e conferma!', 'info');
+
+  } catch (err) {
+    setPaymentLoading(false);
+    showToast(`Errore: ${err.message}`, 'error');
+  }
+});
+
+// Conferma accredito dopo pagamento Revolut
+btnRevolutConfirmDone?.addEventListener('click', async () => {
+  if (!pendingRevolutPayment) return;
+
+  btnRevolutConfirmDone.disabled = true;
+  btnRevolutConfirmDone.querySelector('span').textContent = 'Accredito crediti in corso...';
+
+  try {
+    const captureRes = await apiFetch('/api/payments/capture-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderId: pendingRevolutPayment.orderId,
+        packageId: pendingRevolutPayment.packageId,
+        paymentMethod: pendingRevolutPayment.paymentMethod,
+        reference: pendingRevolutPayment.reference
+      })
+    });
+
+    const captureData = await captureRes.json();
+    btnRevolutConfirmDone.disabled = false;
+    btnRevolutConfirmDone.querySelector('span').textContent = '✓ Ho pagato: Accredita i Miei Crediti';
+
+    if (!captureRes.ok || !captureData.success) {
+      throw new Error(captureData.error || 'Errore durante l\'accredito.');
+    }
+
+    // Accredito riuscito!
+    updateCreditsUI(captureData.newTotalCredits, currentUser.isAdmin);
+    hideCreditsModal();
+    showToast(`🎉 Ricarica completata! +${captureData.creditsAdded} crediti aggiunti al tuo account.`, 'success');
+
+  } catch (err) {
+    btnRevolutConfirmDone.disabled = false;
+    btnRevolutConfirmDone.querySelector('span').textContent = '✓ Ho pagato: Accredita i Miei Crediti';
+    showToast(`Errore accredito: ${err.message}`, 'error');
+  }
+});
+
+btnRevolutCancelStep?.addEventListener('click', () => {
+  resetPaymentModalView();
+});
+
+// Pagamento 2: PayPal Opzionale
+btnPayPaypal?.addEventListener('click', async () => {
+  if (!selectedPackage) return;
+  await processPayment('paypal');
+});
+
+// Pagamento 3: Demo / Test Accredito Istantaneo
+btnPayInstant?.addEventListener('click', async () => {
+  if (!selectedPackage) return;
+  await processPayment('instant_sandbox');
+});
+
+async function processPayment(paymentMethod) {
+  if (!currentUser) {
+    showToast('Effettua il login per acquistare crediti.', 'error');
+    showAuthModal();
+    return;
+  }
+
+  setPaymentLoading(true, 'Creazione ordine di pagamento in corso...');
+
+  try {
+    const orderRes = await apiFetch('/api/payments/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        packageId: selectedPackage.id,
+        paymentMethod
+      })
+    });
+
+    const orderData = await orderRes.json();
+    if (!orderRes.ok || !orderData.success) {
+      throw new Error(orderData.error || 'Errore creazione ordine.');
+    }
+
+    const { orderId } = orderData.order;
+
+    setPaymentLoading(true, `Accredito di ${selectedPackage.credits} crediti in corso...`);
+
+    const captureRes = await apiFetch('/api/payments/capture-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderId,
+        packageId: selectedPackage.id,
+        paymentMethod
+      })
+    });
+
+    const captureData = await captureRes.json();
+    setPaymentLoading(false);
+
+    if (!captureRes.ok || !captureData.success) {
+      throw new Error(captureData.error || 'Errore elaborazione accredito.');
+    }
+
+    updateCreditsUI(captureData.newTotalCredits, currentUser.isAdmin);
+    hideCreditsModal();
+    showToast(`🎉 Ricarica completata! +${captureData.creditsAdded} crediti aggiunti al tuo account.`, 'success');
+
+  } catch (err) {
+    setPaymentLoading(false);
+    showToast(`Errore pagamento: ${err.message}`, 'error');
+    if (paymentStatusBox) {
+      paymentStatusBox.textContent = `Avviso: ${err.message}`;
+      paymentStatusBox.classList.remove('hidden');
+    }
+  }
+}
+
+function setPaymentLoading(isLoading, msg) {
+  if (btnPayRevolut) btnPayRevolut.disabled = isLoading;
+  if (btnPayPaypal) btnPayPaypal.disabled = isLoading;
+  if (btnPayInstant) btnPayInstant.disabled = isLoading;
+  if (paymentStatusBox) {
+    if (isLoading) {
+      paymentStatusBox.textContent = msg || 'Elaborazione...';
+      paymentStatusBox.classList.remove('hidden');
+    } else {
+      paymentStatusBox.classList.add('hidden');
+    }
+  }
+}
 
 // ================= NAVIGATION =================
 
-navBtnNuovo.addEventListener('click', () => {
-  showNuovoCompitoView();
-});
-
-navBtnCompiti.addEventListener('click', () => {
-  showCompitiView();
-});
-
-btnCompitiNuovo.addEventListener('click', () => {
-  showNuovoCompitoView();
-});
-
-navBtnAdmin.addEventListener('click', () => {
-  showAdminView();
-});
+navBtnNuovo?.addEventListener('click', showNuovoCompitoView);
+navBtnCompiti?.addEventListener('click', showCompitiView);
+btnCompitiNuovo?.addEventListener('click', showNuovoCompitoView);
+navBtnAdmin?.addEventListener('click', showAdminView);
 
 function showNuovoCompitoView() {
-  navBtnNuovo.classList.add('active');
-  navBtnCompiti.classList.remove('active');
-  navBtnAdmin.classList.remove('active');
-  compitiSection.classList.add('hidden');
-  adminSection.classList.add('hidden');
-  inputSection.classList.remove('hidden');
+  navBtnNuovo?.classList.add('active');
+  navBtnCompiti?.classList.remove('active');
+  navBtnAdmin?.classList.remove('active');
+  compitiSection?.classList.add('hidden');
+  adminSection?.classList.add('hidden');
+  inputSection?.classList.remove('hidden');
 }
 
 function showCompitiView() {
-  navBtnCompiti.classList.add('active');
-  navBtnNuovo.classList.remove('active');
-  navBtnAdmin.classList.remove('active');
-  inputSection.classList.add('hidden');
-  adminSection.classList.add('hidden');
-  resultsSection.classList.add('hidden');
-  loadingSection.classList.add('hidden');
-  compitiSection.classList.remove('hidden');
+  navBtnCompiti?.classList.add('active');
+  navBtnNuovo?.classList.remove('active');
+  navBtnAdmin?.classList.remove('active');
+  inputSection?.classList.add('hidden');
+  adminSection?.classList.add('hidden');
+  resultsSection?.classList.add('hidden');
+  loadingSection?.classList.add('hidden');
+  compitiSection?.classList.remove('hidden');
   loadCompiti();
 }
 
 function showAdminView() {
   if (!currentUser?.isAdmin) return;
-  navBtnAdmin.classList.add('active');
-  navBtnNuovo.classList.remove('active');
-  navBtnCompiti.classList.remove('active');
-  inputSection.classList.add('hidden');
-  resultsSection.classList.add('hidden');
-  loadingSection.classList.add('hidden');
-  compitiSection.classList.add('hidden');
-  adminSection.classList.remove('hidden');
+  navBtnAdmin?.classList.add('active');
+  navBtnNuovo?.classList.remove('active');
+  navBtnCompiti?.classList.remove('active');
+  inputSection?.classList.add('hidden');
+  resultsSection?.classList.add('hidden');
+  loadingSection?.classList.add('hidden');
+  compitiSection?.classList.add('hidden');
+  adminSection?.classList.remove('hidden');
   loadAdminUsers();
 }
 
@@ -315,7 +787,8 @@ async function loadCompiti() {
 }
 
 function renderCompitiList(compiti) {
-  compitiBadge.textContent = compiti.length;
+  if (compitiBadge) compitiBadge.textContent = compiti.length;
+  if (!compitiList) return;
 
   if (compiti.length === 0) {
     compitiList.innerHTML = `
@@ -335,7 +808,7 @@ function renderCompitiList(compiti) {
       <div class="compito-card" id="card-${c.id}">
         <div class="compito-info">
           <div class="compito-meta">
-            <span class="badge badge-info">📁 ${escapeHtml(c.nome_progetto)}</span>
+            <span class="badge badge-info">Cartella: ${escapeHtml(c.nome_progetto)}</span>
             <span class="badge badge-success">✓ 0 Errori</span>
             <span class="file-badge">📅 ${escapeHtml(c.formattedDate || '')}</span>
           </div>
@@ -344,10 +817,12 @@ function renderCompitiList(compiti) {
         </div>
         <div class="compito-actions">
           <button class="btn btn-secondary btn-sm" onclick="openCompito('${c.id}')" title="Apri esercizio">
-            👁️ Apri
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span>Apri</span>
           </button>
           <a href="/api/download-zip/${c.id}" class="btn btn-primary btn-sm" download title="Scarica ZIP">
-            📦 ZIP
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>ZIP</span>
           </a>
           <button class="btn btn-danger btn-sm" onclick="deleteCompito('${c.id}')" title="Elimina">
             ✕
@@ -398,7 +873,7 @@ window.deleteCompito = async function(id) {
   }
 };
 
-// ================= FILE UPLOAD & PASTE =================
+// ================= FILE UPLOAD & DROP ZONE & PASTE =================
 
 function setPhotoFile(file) {
   if (!file || !file.type.startsWith('image/')) {
@@ -425,39 +900,39 @@ function clearPhotoFile() {
   dropZoneEmpty.classList.remove('hidden');
 }
 
-btnBrowseFile.addEventListener('click', (e) => {
+btnBrowseFile?.addEventListener('click', (e) => {
   e.stopPropagation();
   filePhotoInput.click();
 });
 
-dropZone.addEventListener('click', (e) => {
+dropZone?.addEventListener('click', (e) => {
   if (e.target !== btnRemovePhoto && !dropZonePreview.contains(e.target)) {
     filePhotoInput.click();
   }
 });
 
-filePhotoInput.addEventListener('change', (e) => {
+filePhotoInput?.addEventListener('change', (e) => {
   if (e.target.files && e.target.files[0]) {
     setPhotoFile(e.target.files[0]);
   }
 });
 
-btnRemovePhoto.addEventListener('click', (e) => {
+btnRemovePhoto?.addEventListener('click', (e) => {
   e.stopPropagation();
   clearPhotoFile();
 });
 
 // Drag & Drop
-dropZone.addEventListener('dragover', (e) => {
+dropZone?.addEventListener('dragover', (e) => {
   e.preventDefault();
   dropZone.classList.add('dragover');
 });
 
-dropZone.addEventListener('dragleave', () => {
+dropZone?.addEventListener('dragleave', () => {
   dropZone.classList.remove('dragover');
 });
 
-dropZone.addEventListener('drop', (e) => {
+dropZone?.addEventListener('drop', (e) => {
   e.preventDefault();
   dropZone.classList.remove('dragover');
   if (e.dataTransfer.files && e.dataTransfer.files[0]) {
@@ -465,7 +940,7 @@ dropZone.addEventListener('drop', (e) => {
   }
 });
 
-// Paste Image from Clipboard (Ctrl+V) anywhere on page
+// Incolla immagine da appunti (Ctrl+V) ovunque sulla pagina
 window.addEventListener('paste', (e) => {
   const items = e.clipboardData?.items;
   if (!items) return;
@@ -474,14 +949,14 @@ window.addEventListener('paste', (e) => {
     if (items[i].type.indexOf('image') !== -1) {
       const blob = items[i].getAsFile();
       setPhotoFile(blob);
-      showToast('📸 Immagine incollata dagli appunti!', 'success');
+      showToast('Immagine incollata dagli appunti!', 'success');
       break;
     }
   }
 });
 
 // Accordion Toggle
-toggleDetails.addEventListener('click', () => {
+toggleDetails?.addEventListener('click', () => {
   const isCollapsed = detailsContent.classList.contains('collapsed');
   if (isCollapsed) {
     detailsContent.classList.remove('collapsed');
@@ -494,23 +969,23 @@ toggleDetails.addEventListener('click', () => {
 
 // ================= EXERCISE GENERATION =================
 
-exerciseForm.addEventListener('submit', async (e) => {
+exerciseForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const consegnaText = textConsegna.value.trim();
   if (!consegnaText && !selectedPhotoFile) {
-    showToast('Fornisci il testo della consegna o allega una foto della consegna!', 'error');
+    showToast('Fornisci il testo della consegna o allega una foto della consegna.', 'error');
     return;
   }
 
   // Controllo crediti prima di avviare (se utente normale con 0 crediti)
   if (!currentUser?.isAdmin && (currentUser?.credits <= 0)) {
     showCreditsModal();
-    showToast('Crediti esauriti! Contatta l\'owner per acquistare una ricarica.', 'error');
+    showToast('Hai 0 crediti disponibili. Ricarica per continuare.', 'error');
     return;
   }
 
-  // Show loading stepper
+  // Mostra stepper di caricamento
   loadingSection.classList.remove('hidden');
   resultsSection.classList.add('hidden');
   btnGenerate.disabled = true;
@@ -518,7 +993,6 @@ exerciseForm.addEventListener('submit', async (e) => {
   resetStepper();
   loadingSection.scrollIntoView({ behavior: 'smooth' });
 
-  // Progressive steps simulation
   const stepInterval = runStepperSimulation();
 
   try {
@@ -548,15 +1022,12 @@ exerciseForm.addEventListener('submit', async (e) => {
       throw new Error(data.message || data.error || 'Errore nella generazione del progetto');
     }
 
-    // Aggiorna crediti se restituiti dal server
     if (data.remainingCredits !== undefined) {
       updateCreditsUI(data.remainingCredits, currentUser?.isAdmin);
     }
 
-    // Complete all steps
     completeAllSteps();
 
-    // Render results
     setTimeout(() => {
       loadingSection.classList.add('hidden');
       renderResults(data);
@@ -564,7 +1035,7 @@ exerciseForm.addEventListener('submit', async (e) => {
       resultsSection.scrollIntoView({ behavior: 'smooth' });
       btnGenerate.disabled = false;
       showToast('Esercizio risolto e salvato nei tuoi compiti!', 'success');
-      loadCompiti(); // refresh compiti badge & list
+      loadCompiti();
     }, 600);
 
   } catch (err) {
@@ -578,23 +1049,27 @@ exerciseForm.addEventListener('submit', async (e) => {
   }
 });
 
-// Stepper animation
 function resetStepper() {
   for (let i = 1; i <= 5; i++) {
     const step = document.getElementById(`step-${i}`);
-    step.className = 'step-item';
+    if (step) step.className = 'step-item';
   }
-  document.getElementById('step-1').classList.add('active');
+  const first = document.getElementById('step-1');
+  if (first) first.classList.add('active');
 }
 
 function runStepperSimulation() {
   let currentStep = 1;
   return setInterval(() => {
     if (currentStep < 5) {
-      document.getElementById(`step-${currentStep}`).classList.remove('active');
-      document.getElementById(`step-${currentStep}`).classList.add('done');
+      const cur = document.getElementById(`step-${currentStep}`);
+      if (cur) {
+        cur.classList.remove('active');
+        cur.classList.add('done');
+      }
       currentStep++;
-      document.getElementById(`step-${currentStep}`).classList.add('active');
+      const next = document.getElementById(`step-${currentStep}`);
+      if (next) next.classList.add('active');
     }
   }, 4000);
 }
@@ -602,7 +1077,7 @@ function runStepperSimulation() {
 function completeAllSteps() {
   for (let i = 1; i <= 5; i++) {
     const step = document.getElementById(`step-${i}`);
-    step.className = 'step-item done';
+    if (step) step.className = 'step-item done';
   }
 }
 
@@ -666,7 +1141,7 @@ function renderTerminal(project, testResult) {
 
   termHtml += `<span class="term-prompt">studente@scuola:~/progetti/${project.nome_progetto}$</span> <span class="term-cmd">echo $?</span>\n`;
   termHtml += `0\n\n`;
-  termHtml += `<span class="term-success">Funziona. Zero warning, zero errori con g++ -Wall -Wconversion.</span>`;
+  termHtml += `<span class="term-success">Compilazione ed esecuzione completate con successo (0 warning, 0 errori).</span>`;
 
   terminalBody.innerHTML = termHtml;
 }
@@ -718,15 +1193,14 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
-// View switch in README tab (Rendered vs Raw)
-btnViewRendered.addEventListener('click', () => {
+btnViewRendered?.addEventListener('click', () => {
   btnViewRendered.classList.add('active');
   btnViewRaw.classList.remove('active');
   readmeRendered.classList.remove('hidden');
   readmeRaw.classList.add('hidden');
 });
 
-btnViewRaw.addEventListener('click', () => {
+btnViewRaw?.addEventListener('click', () => {
   btnViewRaw.classList.add('active');
   btnViewRendered.classList.remove('active');
   readmeRendered.classList.add('hidden');
@@ -735,23 +1209,22 @@ btnViewRaw.addEventListener('click', () => {
 
 // ================= COPY & EXPORT ACTIONS =================
 
-btnCopyReadme.addEventListener('click', () => {
+btnCopyReadme?.addEventListener('click', () => {
   if (!currentProject) return;
   navigator.clipboard.writeText(currentProject.readme_md || '');
-  showToast('📋 Relazione README.md copiata negli appunti!', 'success');
+  showToast('Relazione README.md copiata negli appunti!', 'success');
 });
 
-btnCopyTabReadme.addEventListener('click', () => {
+btnCopyTabReadme?.addEventListener('click', () => {
   if (!currentProject) return;
   navigator.clipboard.writeText(currentProject.readme_md || '');
-  showToast('📋 Markdown copiato negli appunti!', 'success');
+  showToast('Markdown copiato negli appunti!', 'success');
 });
 
-btnPrintDoc.addEventListener('click', () => {
+btnPrintDoc?.addEventListener('click', () => {
   window.print();
 });
 
-// Generic copy for code tabs
 document.querySelectorAll('[data-copy-target]').forEach(btn => {
   btn.addEventListener('click', () => {
     const targetId = btn.getAttribute('data-copy-target');
@@ -839,8 +1312,8 @@ function renderAdminUsersTable(users) {
     const cred = u.credits !== undefined ? u.credits : 1;
     const credClass = cred > 0 ? 'positive' : 'zero';
     const roleBadge = isCurrentAdmin
-      ? '<span class="role-badge admin">👑 Admin</span>'
-      : '<span class="role-badge user">👤 Utente</span>';
+      ? '<span class="role-badge admin">Admin</span>'
+      : '<span class="role-badge user">Utente</span>';
 
     const dateStr = u.createdAt ? new Date(u.createdAt).toLocaleDateString('it-IT', {
       day: '2-digit', month: '2-digit', year: 'numeric'
@@ -861,16 +1334,16 @@ function renderAdminUsersTable(users) {
         <td><span style="color: var(--text-muted); font-size: 0.82rem;">${dateStr}</span></td>
         <td>
           <div class="btn-action-group">
-            <button type="button" class="btn-credit-plus" onclick="handleCreditChange('${u.id}', 1)" title="Aggiungi 1 credito">+1</button>
-            <button type="button" class="btn-credit-plus" onclick="handleCreditChange('${u.id}', 5)" title="Aggiungi 5 crediti">+5</button>
-            <button type="button" class="btn-credit-minus" onclick="handleCreditChange('${u.id}', -1)" title="Togli 1 credito">-1</button>
-            <button type="button" class="btn-credit-set" onclick="handleCreditPrompt('${u.id}', ${cred}, '${escapeHtml(u.email)}')" title="Imposta numero esatto">✏️</button>
+            <button type="button" class="btn-credit-pill-act green" onclick="handleCreditChange('${u.id}', 1)" title="Aggiungi 1 credito">+1</button>
+            <button type="button" class="btn-credit-pill-act green" onclick="handleCreditChange('${u.id}', 5)" title="Aggiungi 5 crediti">+5</button>
+            <button type="button" class="btn-credit-pill-act amber" onclick="handleCreditChange('${u.id}', -1)" title="Togli 1 credito">-1</button>
+            <button type="button" class="btn-credit-pill-act" onclick="handleCreditPrompt('${u.id}', ${cred}, '${escapeHtml(u.email)}')" title="Imposta numero esatto">Modifica</button>
           </div>
         </td>
         <td>
           ${!isCurrentAdmin ? `
             <button type="button" class="btn-delete-user" onclick="handleDeleteUser('${u.id}', '${escapeHtml(u.email)}')" title="Elimina utente">
-              🗑️
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           ` : '<span style="color: var(--text-dim); font-size: 0.75rem;">Protetto</span>'}
         </td>
@@ -879,7 +1352,6 @@ function renderAdminUsersTable(users) {
   }).join('');
 }
 
-// Handler cambio crediti (+1, +5, -1)
 window.handleCreditChange = async function(userId, delta) {
   try {
     const res = await apiFetch(`/api/admin/users/${userId}/credits`, {
@@ -898,7 +1370,6 @@ window.handleCreditChange = async function(userId, delta) {
   }
 };
 
-// Handler impostazione crediti personalizzati
 window.handleCreditPrompt = async function(userId, currentVal, email) {
   const input = prompt(`Inserisci il numero esatto di crediti per l'utente ${email}:`, currentVal);
   if (input === null) return;
@@ -925,7 +1396,6 @@ window.handleCreditPrompt = async function(userId, currentVal, email) {
   }
 };
 
-// Handler eliminazione utente
 window.handleDeleteUser = async function(userId, email) {
   if (!confirm(`Sei sicuro di voler eliminare l'utente ${email} da Supabase? L'azione è irreversibile.`)) {
     return;
@@ -945,7 +1415,6 @@ window.handleDeleteUser = async function(userId, email) {
   }
 };
 
-// Ricerca e filtro utenti live
 if (adminSearchUsers) {
   adminSearchUsers.addEventListener('input', (e) => {
     const q = e.target.value.toLowerCase().trim();
@@ -961,23 +1430,17 @@ if (adminSearchUsers) {
   });
 }
 
-// Bottone ricarica admin
-if (btnAdminRefresh) {
-  btnAdminRefresh.addEventListener('click', () => {
-    loadAdminUsers();
-    showToast('Dati admin aggiornati', 'info');
-  });
-}
+btnAdminRefresh?.addEventListener('click', () => {
+  loadAdminUsers();
+  showToast('Dati admin aggiornati', 'info');
+});
 
-// Modal creazione utente da Admin
-if (btnAdminAddUser) {
-  btnAdminAddUser.addEventListener('click', () => {
-    createUserError?.classList.add('hidden');
-    createUserForm?.reset();
-    if (newUserCredits) newUserCredits.value = '1';
-    createUserModal?.classList.remove('hidden');
-  });
-}
+btnAdminAddUser?.addEventListener('click', () => {
+  createUserError?.classList.add('hidden');
+  createUserForm?.reset();
+  if (newUserCredits) newUserCredits.value = '1';
+  createUserModal?.classList.remove('hidden');
+});
 
 btnCloseCreateUser?.addEventListener('click', () => {
   createUserModal?.classList.add('hidden');
@@ -987,38 +1450,36 @@ btnCancelCreateUser?.addEventListener('click', () => {
   createUserModal?.classList.add('hidden');
 });
 
-if (createUserForm) {
-  createUserForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    createUserError?.classList.add('hidden');
+createUserForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  createUserError?.classList.add('hidden');
 
-    const email = newUserEmail.value.trim();
-    const password = newUserPassword.value;
-    const username = newUserName.value.trim();
-    const credits = parseInt(newUserCredits.value, 10) || 1;
+  const email = newUserEmail.value.trim();
+  const password = newUserPassword.value;
+  const username = newUserName.value.trim();
+  const credits = parseInt(newUserCredits.value, 10) || 1;
 
-    try {
-      const res = await apiFetch('/api/admin/users/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, username, credits })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Impossibile creare l\'utente');
-      }
-
-      createUserModal?.classList.add('hidden');
-      showToast(`Utente ${email} creato con ${credits} credito/i!`, 'success');
-      loadAdminUsers();
-    } catch (err) {
-      if (createUserError) {
-        createUserError.textContent = err.message;
-        createUserError.classList.remove('hidden');
-      }
+  try {
+    const res = await apiFetch('/api/admin/users/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, username, credits })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Impossibile creare l\'utente');
     }
-  });
-}
 
-// Start Auth check
+    createUserModal?.classList.add('hidden');
+    showToast(`Utente ${email} creato con ${credits} credito/i!`, 'success');
+    loadAdminUsers();
+  } catch (err) {
+    if (createUserError) {
+      createUserError.textContent = err.message;
+      createUserError.classList.remove('hidden');
+    }
+  }
+});
+
+// Avvia verifica autenticazione iniziale
 checkAuth();

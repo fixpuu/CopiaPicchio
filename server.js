@@ -22,6 +22,8 @@ const { generateExercise, fixExerciseCode, formatComprehensiveReadme } = require
 const { testProjectCompilation, ensureMakefileTabs, formatCppWithTabs } = require('./compiler');
 const compitiManager = require('./data/compitiManager');
 const supabaseModule = require('./supabase');
+const resendModule = require('./resend');
+const paymentsModule = require('./payments');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,6 +38,7 @@ const USERS = {
 // Memory store per sessioni attive (sincronizzato con data/sessions.json)
 const activeSessions = compitiManager.loadSessions();
 const generatedProjects = new Map();
+const pendingRegistrations = new Map(); // email -> { email, password, username, otp, expiresAt, attempts }
 
 // Configurazione Multer per upload file (memoria)
 const upload = multer({
@@ -215,6 +218,305 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   return res.status(401).json({ error: 'Credenziali non valide.' });
+});
+
+/**
+ * Richiesta di registrazione con invio codice OTP via Resend
+ */
+app.post('/api/auth/register-request', async (req, res) => {
+  try {
+    const { email, password, username } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email e password sono obbligatori.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanUsername = (username && username.trim()) || cleanEmail.split('@')[0];
+
+    // Validazione email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return res.status(400).json({ error: 'Inserisci un indirizzo email valido.' });
+    }
+
+    // Validazione password minima
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'La password deve contenere almeno 6 caratteri.' });
+    }
+
+    // Verifica se l'email esiste già su Supabase
+    if (supabaseModule.isConfigured()) {
+      const existing = await supabaseModule.findUserByEmail(cleanEmail);
+      if (existing) {
+        return res.status(400).json({ error: 'Un account con questa email esiste già. Effettua l\'accesso con la tua password.' });
+      }
+    }
+
+    // Genera codice OTP numerico a 6 cifre
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Salva nei record pendenti (scadenza: 10 minuti)
+    pendingRegistrations.set(cleanEmail, {
+      email: cleanEmail,
+      password,
+      username: cleanUsername,
+      otp,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+      createdAt: Date.now(),
+      attempts: 0
+    });
+
+    // Invia OTP via Resend
+    const sendResult = await resendModule.sendOtpEmail({
+      to: cleanEmail,
+      otp,
+      username: cleanUsername
+    });
+
+    return res.json({
+      success: true,
+      message: `Codice OTP di verifica inviato a ${cleanEmail}`,
+      email: cleanEmail,
+      simulated: sendResult.simulated,
+      note: sendResult.note,
+      testOtp: sendResult.simulated ? sendResult.otp : undefined
+    });
+  } catch (err) {
+    console.error('[Register Request Error]', err);
+    return res.status(500).json({ error: `Errore durante l'invio dell'OTP: ${err.message}` });
+  }
+});
+
+/**
+ * Verifica del codice OTP e creazione account definitivo
+ */
+app.post('/api/auth/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Email e codice OTP sono obbligatori.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanOtp = otp.trim();
+
+    const pending = pendingRegistrations.get(cleanEmail);
+    if (!pending) {
+      return res.status(400).json({ error: 'Nessuna registrazione in attesa o codice scaduto. Compila nuovamente la registrazione.' });
+    }
+
+    if (Date.now() > pending.expiresAt) {
+      pendingRegistrations.delete(cleanEmail);
+      return res.status(400).json({ error: 'Codice OTP scaduto. Richiedine uno nuovo.' });
+    }
+
+    if (pending.otp !== cleanOtp) {
+      pending.attempts = (pending.attempts || 0) + 1;
+      if (pending.attempts >= 5) {
+        pendingRegistrations.delete(cleanEmail);
+        return res.status(400).json({ error: 'Troppi tentativi errati. Richiedi un nuovo codice.' });
+      }
+      return res.status(400).json({ error: 'Codice OTP non valido. Controlla la tua email.' });
+    }
+
+    // OTP Verificato! Creazione utente su Supabase (1 credito omaggio)
+    let user;
+    if (supabaseModule.isConfigured()) {
+      try {
+        user = await supabaseModule.createNewUser({
+          email: pending.email,
+          password: pending.password,
+          username: pending.username,
+          credits: 1
+        });
+      } catch (sbErr) {
+        // Se l'utente esiste già, avvisa l'utente
+        if (sbErr.message && sbErr.message.includes('already registered')) {
+          return res.status(400).json({ error: 'Questo account è già stato registrato. Effettua il login.' });
+        }
+        return res.status(500).json({ error: `Errore creazione utente Supabase: ${sbErr.message}` });
+      }
+    } else {
+      user = {
+        id: `local-${Date.now()}`,
+        email: pending.email,
+        username: pending.username,
+        credits: 1
+      };
+    }
+
+    // Crea sessione attiva
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const userIdentifier = pending.username || pending.email.split('@')[0];
+
+    activeSessions.set(sessionToken, {
+      username: userIdentifier,
+      email: pending.email,
+      userId: user.id,
+      isAdmin: false,
+      loginTime: Date.now()
+    });
+    compitiManager.persistSessions(activeSessions);
+
+    res.cookie('cp_session', sessionToken, {
+      signed: true,
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000
+    });
+
+    pendingRegistrations.delete(cleanEmail);
+
+    return res.json({
+      success: true,
+      username: userIdentifier,
+      email: pending.email,
+      credits: 1,
+      isAdmin: false,
+      sessionToken,
+      message: 'Registrazione verificata con successo! Benvenuto su CopiaPicchio! Hai ricevuto 1 credito.'
+    });
+  } catch (err) {
+    console.error('[Verify OTP Error]', err);
+    return res.status(500).json({ error: `Errore verifica OTP: ${err.message}` });
+  }
+});
+
+/**
+ * Reinvia codice OTP
+ */
+app.post('/api/auth/resend-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Specifica l\'indirizzo email.' });
+
+    const cleanEmail = email.trim().toLowerCase();
+    const pending = pendingRegistrations.get(cleanEmail);
+    if (!pending) {
+      return res.status(400).json({ error: 'Nessuna registrazione in corso trovata per questa email.' });
+    }
+
+    // Cooldown minimo 20 secondi tra reinvii
+    if (Date.now() - pending.createdAt < 20000) {
+      const waitSec = Math.ceil((20000 - (Date.now() - pending.createdAt)) / 1000);
+      return res.status(429).json({ error: `Attendi ancora ${waitSec} secondi prima di richiedere un nuovo codice.` });
+    }
+
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    pending.otp = newOtp;
+    pending.expiresAt = Date.now() + 10 * 60 * 1000;
+    pending.createdAt = Date.now();
+    pending.attempts = 0;
+
+    const sendResult = await resendModule.sendOtpEmail({
+      to: cleanEmail,
+      otp: newOtp,
+      username: pending.username
+    });
+
+    return res.json({
+      success: true,
+      message: 'Un nuovo codice OTP è stato inviato!',
+      simulated: sendResult.simulated,
+      note: sendResult.note,
+      testOtp: sendResult.simulated ? sendResult.otp : undefined
+    });
+  } catch (err) {
+    return res.status(500).json({ error: `Errore reinvio OTP: ${err.message}` });
+  }
+});
+
+// ================= API PAGAMENTI AUTOMATICI (ALTERNATIVA A STRIPE) =================
+
+// Configurazione pubblica pacchetti e gateway
+app.get('/api/payments/config', (req, res) => {
+  res.json({
+    success: true,
+    ...paymentsModule.getPublicConfig()
+  });
+});
+
+// Crea ordine pagamento (PayPal / Instant alternative)
+app.post('/api/payments/create-order', requireAuth, async (req, res) => {
+  try {
+    const { packageId, paymentMethod } = req.body;
+    if (!packageId) {
+      return res.status(400).json({ error: 'Seleziona un pacchetto crediti.' });
+    }
+
+    const order = await paymentsModule.createPaymentOrder({
+      packageId,
+      user: req.user,
+      paymentMethod: paymentMethod || 'paypal'
+    });
+
+    res.json({ success: true, order });
+  } catch (err) {
+    console.error('[Payment Create Order Error]', err);
+    res.status(500).json({ error: `Errore creazione ordine: ${err.message}` });
+  }
+});
+
+// Cattura e accredita crediti all'account
+app.post('/api/payments/capture-order', requireAuth, async (req, res) => {
+  try {
+    const { orderId, packageId, paymentMethod } = req.body;
+    if (!orderId || !packageId) {
+      return res.status(400).json({ error: 'Parametri d\'ordine mancanti.' });
+    }
+
+    const result = await paymentsModule.captureAndFulfillPayment({
+      orderId,
+      packageId,
+      user: req.user,
+      paymentMethod: paymentMethod || 'paypal'
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error('[Payment Capture Error]', err);
+    res.status(500).json({ error: `Errore finalizzazione pagamento: ${err.message}` });
+  }
+});
+
+// Cronologia transazioni personali
+app.get('/api/payments/transactions', requireAuth, (req, res) => {
+  const allTx = paymentsModule.loadTransactions();
+  const userId = req.user.userId || req.user.id || req.user.username;
+  const userEmail = req.user.email;
+
+  const userTx = allTx.filter(t =>
+    t.userId === userId ||
+    (t.email && userEmail && t.email.toLowerCase() === userEmail.toLowerCase()) ||
+    t.username === req.user.username
+  );
+
+  res.json({ success: true, transactions: userTx });
+});
+
+// Webhook Lemon Squeezy (Alternativa Merchant of Record a Stripe)
+app.post('/api/payments/webhook/lemonsqueezy', async (req, res) => {
+  try {
+    const event = req.body;
+    const eventName = event?.meta?.event_name;
+    console.log(`[LemonSqueezy Webhook] Ricevuto evento: ${eventName}`);
+
+    if (eventName === 'order_created') {
+      const customData = event.meta?.custom_data || {};
+      const userId = customData.user_id;
+      const creditsToAdd = parseInt(customData.credits, 10) || 15;
+
+      if (userId) {
+        await supabaseModule.adjustUserCredits(userId, creditsToAdd);
+        console.log(`[LemonSqueezy] Accreditati ${creditsToAdd} crediti a user ${userId}`);
+      }
+    }
+
+    res.json({ received: true });
+  } catch (err) {
+    console.error('[LemonSqueezy Webhook Error]', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/auth/logout', (req, res) => {

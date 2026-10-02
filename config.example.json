@@ -1,5 +1,11 @@
 {
   "GEMINI_API_KEY": "TUO_GEMINI_API_KEY",
   "SUPABASE_URL": "https://xyzcompany.supabase.co",
-  "SUPABASE_KEY": "TUO_SUPABASE_SECRET_KEY"
+  "SUPABASE_KEY": "TUO_SUPABASE_SECRET_KEY",
+  "ADMIN_USERS": ["matty", "zome"],
+  "RESEND_API_KEY": "re_...",
+  "RESEND_FROM": "CopiaPicchio <onboarding@resend.dev>",
+  "PAYMENT_PROVIDER": "revolut",
+  "REVOLUT_TAG": "tuo_revtag",
+  "PAYPAL_CLIENT_ID": "sb"
 }

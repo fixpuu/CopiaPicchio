@@ -365,6 +365,21 @@ async function createNewUser({ email, password, username, credits }) {
 }
 
 /**
+ * Cerca un utente per email
+ */
+async function findUserByEmail(email) {
+  if (!supabase || !email) return null;
+  const clean = email.trim().toLowerCase();
+  try {
+    const { data } = await supabase.auth.admin.listUsers();
+    if (data?.users) {
+      return data.users.find(u => (u.email || '').toLowerCase() === clean);
+    }
+  } catch (_) {}
+  return null;
+}
+
+/**
  * Elimina un utente (impedisce l'eliminazione degli account admin)
  */
 async function deleteUser(userId) {
@@ -448,6 +463,7 @@ module.exports = {
   adjustUserCredits,
   consumeCredit,
   createNewUser,
+  findUserByEmail,
   deleteUser,
   saveCompitoSupabase,
   getCompitiSupabase

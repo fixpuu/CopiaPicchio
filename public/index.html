@@ -18,18 +18,27 @@
 </head>
 <body>
 
-  <!-- ================= AUTH MODAL ================= -->
+  <!-- ================= AUTH MODAL (LOGIN & REGISTRAZIONE OTP RESEND) ================= -->
   <div id="auth-modal" class="modal-overlay">
-    <div class="modal-card">
+    <div class="modal-card auth-modal-card">
       <div class="modal-header">
-        <div class="logo-badge">🦜</div>
-        <h2>Accedi a CopiaPicchio!</h2>
-        <p>Accesso studenti e docenti.</p>
+        <div class="brand-avatar-badge">
+          <span>🦜</span>
+        </div>
+        <h2 id="auth-modal-title">Accedi a CopiaPicchio</h2>
+        <p id="auth-modal-subtitle">Risolutore didattico di informatica C++ ad alta fedeltà.</p>
       </div>
 
+      <!-- Auth Switch Tabs -->
+      <div class="auth-tabs" id="auth-tabs">
+        <button type="button" class="auth-tab-btn active" id="tab-btn-login">Accedi</button>
+        <button type="button" class="auth-tab-btn" id="tab-btn-register">Registrati</button>
+      </div>
+
+      <!-- 1. LOGIN FORM -->
       <form id="login-form">
         <div class="form-group">
-          <label for="login-username">Email / Nome Utente</label>
+          <label for="login-username">Email o Nome Utente</label>
           <input type="text" id="login-username" placeholder="nome@scuola.it o username" required autocomplete="username">
         </div>
 
@@ -44,9 +53,82 @@
           <span>Accedi</span>
         </button>
 
-        <p class="auth-notice mt-2">
-          Autenticazione gestita con <strong>Supabase Auth</strong>. Crea le credenziali direttamente nella dashboard di Supabase.
+        <p class="auth-switch-hint">
+          Non hai ancora un account? <a href="#" id="link-to-register">Registrati ora con OTP</a>
         </p>
+      </form>
+
+      <!-- 2. REGISTER FORM - STEP 1: Richiesta OTP -->
+      <form id="register-form" class="hidden">
+        <div class="form-group">
+          <label for="register-email">Email Personale o Scolastica *</label>
+          <input type="email" id="register-email" placeholder="mario.rossi@scuola.it" required autocomplete="email">
+        </div>
+
+        <div class="form-group">
+          <label for="register-username">Nome Utente (opzionale)</label>
+          <input type="text" id="register-username" placeholder="Es. mario_rossi" autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label for="register-password">Crea Password *</label>
+          <input type="password" id="register-password" placeholder="Almeno 6 caratteri" required minlength="6" autocomplete="new-password">
+        </div>
+
+        <div id="register-error" class="alert-error hidden"></div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="btn-register-submit">
+          <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          <span>Invia Codice OTP via Email</span>
+        </button>
+
+        <p class="auth-notice mt-2">
+          Riceverai un codice OTP a 6 cifre via email tramite <strong>Resend</strong> per convalidare il tuo account e sbloccare 1 credito omaggio.
+        </p>
+
+        <p class="auth-switch-hint">
+          Hai già un account? <a href="#" id="link-to-login">Accedi qui</a>
+        </p>
+      </form>
+
+      <!-- 3. OTP VERIFY FORM - STEP 2: Convalida Codice -->
+      <form id="otp-verify-form" class="hidden">
+        <div class="otp-notice-box">
+          <div class="otp-notice-icon">✉️</div>
+          <p>
+            Abbiamo inviato un codice OTP di verifica a:<br>
+            <strong id="otp-display-email" class="highlight-email">studente@scuola.it</strong>
+          </p>
+        </div>
+
+        <div id="otp-sandbox-banner" class="alert-box alert-info-box hidden">
+          <span class="alert-icon">ℹ️</span>
+          <span id="otp-sandbox-text">Modalità di prova attiva.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="otp-code-input" class="text-center">Inserisci il Codice a 6 Cifre</label>
+          <input type="text" id="otp-code-input" class="otp-input-box" placeholder="••••••" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" required autocomplete="one-time-code">
+        </div>
+
+        <div id="otp-verify-error" class="alert-error hidden"></div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="btn-otp-verify-submit">
+          <span>Verifica e Completa Registrazione</span>
+        </button>
+
+        <div class="otp-resend-row">
+          <button type="button" class="btn-link" id="btn-resend-otp">
+            Non hai ricevuto il codice? Reinvia
+          </button>
+          <span id="otp-cooldown-timer" class="cooldown-text hidden">(attendi 30s)</span>
+        </div>
+
+        <div class="otp-back-row">
+          <button type="button" class="btn-link text-muted" id="btn-back-to-register">
+            ← Modifica indirizzo email
+          </button>
+        </div>
       </form>
     </div>
   </div>
@@ -57,37 +139,44 @@
       <div class="brand">
         <div class="brand-logo">🦜</div>
         <div class="brand-text">
-          <h1>CopiaPicchio!</h1>
+          <h1>CopiaPicchio</h1>
         </div>
       </div>
 
       <!-- Navigation tabs -->
       <nav class="main-nav">
         <button class="nav-tab active" id="nav-btn-nuovo">
-          <span>✍️ Nuovo Compito</span>
+          <svg class="nav-icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <span>Nuovo Compito</span>
         </button>
         <button class="nav-tab" id="nav-btn-compiti">
-          <span>📚 I Miei Compiti</span>
+          <svg class="nav-icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          <span>I Miei Compiti</span>
           <span class="nav-badge" id="compiti-badge">0</span>
         </button>
         <button class="nav-tab nav-tab-admin hidden" id="nav-btn-admin">
-          <span>🛡️ Admin Dashboard</span>
+          <svg class="nav-icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>Admin</span>
         </button>
       </nav>
 
       <div class="header-status">
-        <div class="credits-pill" id="credits-pill" title="Crediti disponibili (1 credito = 1 generazione). Clicca per info o ricarica">
-          <span class="credits-icon">⚡</span>
-          <span class="credits-text"><span id="user-credits-val">1</span> Crediti</span>
-        </div>
+        <!-- Pill Crediti: apre lo Shop di Ricarica -->
+        <button type="button" class="credits-pill" id="credits-pill" title="Crediti disponibili. Clicca per acquistare o gestire le ricariche">
+          <svg class="credits-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span class="credits-count"><span id="user-credits-val">1</span> Crediti</span>
+          <span class="credits-recharge-badge">+ Ricarica</span>
+        </button>
+
         <div class="ai-status-pill">
           <span class="status-dot"></span>
           <span class="status-label">Gemini 3.1 Flash Lite</span>
         </div>
+
         <div class="user-profile" id="user-profile-badge">
-          <span class="user-avatar" id="avatar-text">👤</span>
+          <span class="user-avatar-circle" id="avatar-text">U</span>
           <span class="user-name" id="current-username">Utente</span>
-          <button class="btn btn-ghost btn-sm" id="btn-logout" title="Esci">Esci</button>
+          <button class="btn btn-ghost btn-sm" id="btn-logout" title="Esci dall'account">Esci</button>
         </div>
       </div>
     </div>
@@ -100,15 +189,17 @@
     <section class="card admin-card hidden" id="admin-section">
       <div class="card-header flex-header">
         <div class="section-title">
-          <h2>🛡️ Admin Dashboard (Riservata)</h2>
-          <p>Gestione utenti Supabase, assegnazione e revoca crediti in tempo reale.</p>
+          <h2>Admin Dashboard</h2>
+          <p>Gestione utenti Supabase, crediti e stato di sistema in tempo reale.</p>
         </div>
         <div class="header-actions">
           <button type="button" class="btn btn-secondary btn-sm" id="btn-admin-refresh">
-            <span>🔄 Ricarica</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+            <span>Ricarica Dati</span>
           </button>
           <button type="button" class="btn btn-primary btn-sm" id="btn-admin-add-user">
-            <span>➕ Nuovo Utente</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Nuovo Utente</span>
           </button>
         </div>
       </div>
@@ -116,38 +207,46 @@
       <!-- Statistiche veloci admin -->
       <div class="admin-stats-grid">
         <div class="stat-card">
-          <div class="stat-icon">👥</div>
+          <div class="stat-icon-wrapper">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
           <div class="stat-data">
             <div class="stat-val" id="admin-stat-users">0</div>
             <div class="stat-lbl">Utenti Totali</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon">⚡</div>
+          <div class="stat-icon-wrapper">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
           <div class="stat-data">
             <div class="stat-val" id="admin-stat-credits">0</div>
             <div class="stat-lbl">Crediti Assegnati</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon">⚠️</div>
+          <div class="stat-icon-wrapper warning">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
           <div class="stat-data">
             <div class="stat-val" id="admin-stat-zero">0</div>
             <div class="stat-lbl">Utenti a 0 Crediti</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon">👑</div>
+          <div class="stat-icon-wrapper admin">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
           <div class="stat-data">
             <div class="stat-val" id="admin-stat-admins">2</div>
-            <div class="stat-lbl">Admin (matty, zome)</div>
+            <div class="stat-lbl">Admin Autorizzati</div>
           </div>
         </div>
       </div>
 
       <!-- Filtro ricerca -->
       <div class="admin-filter-bar">
-        <input type="text" id="admin-search-users" placeholder="🔍 Cerca utente per email o username...">
+        <input type="text" id="admin-search-users" placeholder="Cerca utente per email o username...">
       </div>
 
       <!-- Tabella utenti -->
@@ -174,11 +273,12 @@
     <section class="card compiti-card hidden" id="compiti-section">
       <div class="card-header flex-header">
         <div class="section-title">
-          <h2>📚 I Miei Compiti</h2>
-          <p>Tutti gli esercizi svolti salvati nel tuo profilo. Puoi riaprirli o riscaricarli quando vuoi.</p>
+          <h2>I Miei Compiti</h2>
+          <p>Tutti gli esercizi svolti salvati nel tuo profilo. Puoi riaprirli o scaricarli quando vuoi.</p>
         </div>
         <button class="btn btn-primary btn-sm" id="btn-compiti-nuovo">
-          <span>+ Nuovo Compito</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>Nuovo Compito</span>
         </button>
       </div>
 
@@ -192,15 +292,15 @@
       <div class="card-header">
         <div class="section-title">
           <h2>Consegna dell'Esercizio</h2>
-          <p>Scatta o carica la foto del compito, oppure incolla il testo.</p>
+          <p>Scatta o carica la foto del compito, oppure incolla direttamente il testo.</p>
         </div>
       </div>
 
       <!-- Banner avviso crediti esauriti -->
       <div id="banner-zero-credits" class="alert-box alert-warning-box hidden">
         <div class="alert-content">
-          <span class="alert-icon">⚠️</span>
-          <span><strong>Crediti esauriti!</strong> Hai 0 crediti disponibili (1 credito = 1 generazione). Per poter svolgere compiti, ricarica il tuo account.</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span><strong>Crediti esauriti.</strong> Hai 0 crediti disponibili (1 credito = 1 generazione completa). Ricarica il tuo account per svolgere compiti.</span>
         </div>
         <button type="button" class="btn btn-secondary btn-sm" id="btn-banner-recharge">Ricarica Crediti</button>
       </div>
@@ -215,10 +315,12 @@
             <div class="drop-zone" id="drop-zone">
               <input type="file" id="file-photo" accept="image/*" class="file-input-hidden">
               <div class="drop-zone-content" id="drop-zone-empty">
-                <div class="drop-icon">📷</div>
-                <p class="drop-title">Tocca per scattare/selezionare una foto o <strong>incolla (Ctrl+V)</strong></p>
-                <span class="drop-subtitle">PNG, JPG, WEBP (foto lavagna, quaderno o stampato)</span>
-                <button type="button" class="btn btn-secondary btn-sm mt-2" id="btn-browse-file">Scegli Foto</button>
+                <div class="drop-icon-svg-wrapper">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                </div>
+                <p class="drop-title">Trascina una foto, tocca per selezionare o premi <strong>Ctrl+V</strong></p>
+                <span class="drop-subtitle">PNG, JPG, WEBP fino a 25MB (lavagna, quaderno o stampato)</span>
+                <button type="button" class="btn btn-secondary btn-sm mt-2" id="btn-browse-file">Scegli File</button>
               </div>
 
               <!-- Preview quando selezionata -->
@@ -243,7 +345,10 @@
         <!-- Parametri facoltativi e metadati -->
         <div class="details-section">
           <button type="button" class="accordion-toggle" id="toggle-details">
-            <span>⚙️ Dati Relazione (Autore, Classe, Data, Nome Cartella)</span>
+            <span class="accordion-label">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span>Parametri Relazione (Autore, Classe, Data, Nome Progetto)</span>
+            </span>
             <span class="toggle-icon" id="toggle-icon">▼</span>
           </button>
 
@@ -273,7 +378,7 @@
 
               <div class="form-group flex-2">
                 <label for="field-argomenti">Argomenti Trattati (opzionale)</label>
-                <input type="text" id="field-argomenti" placeholder="Es. Vettori, numeri casuali, ordinamento bubble sort, warning -Wconversion">
+                <input type="text" id="field-argomenti" placeholder="Es. Vettori, numeri casuali, bubble sort, warning -Wconversion">
               </div>
             </div>
           </div>
@@ -282,7 +387,7 @@
         <!-- Submit button -->
         <div class="form-actions">
           <button type="submit" class="btn btn-primary btn-lg btn-mobile-block" id="btn-generate">
-            <span class="btn-icon">⚡</span>
+            <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
             <span>Risolvi Esercizio</span>
           </button>
         </div>
@@ -293,30 +398,30 @@
     <section class="card loading-card hidden" id="loading-section">
       <div class="loading-header">
         <div class="spinner"></div>
-        <h3>CopiaPicchio al lavoro...</h3>
-        <p>Sviluppo dell'esercizio secondo la mappa didattica e compilazione con g++ -Wall -Wconversion.</p>
+        <h3>Elaborazione Esercizio in Corso</h3>
+        <p>Generazione architettura modulare C++, makefile con tabulazioni e verifica compilazione.</p>
       </div>
 
       <div class="stepper">
         <div class="step-item" id="step-1">
-          <div class="step-icon">📸</div>
-          <div class="step-label">1. Analisi Consegna & Riconoscimento Foto</div>
+          <div class="step-badge">01</div>
+          <div class="step-label">Analisi Consegna & Riconoscimento Foto</div>
         </div>
         <div class="step-item" id="step-2">
-          <div class="step-icon">🧠</div>
-          <div class="step-label">2. Architettura C++ a 3 File & Makefile</div>
+          <div class="step-badge">02</div>
+          <div class="step-label">Architettura C++ a 3 File & Makefile</div>
         </div>
         <div class="step-item" id="step-3">
-          <div class="step-icon">⚙️</div>
-          <div class="step-label">3. Compilazione Locale g++ -Wall -Wconversion</div>
+          <div class="step-badge">03</div>
+          <div class="step-label">Compilazione Locale g++ -Wall -Wconversion</div>
         </div>
         <div class="step-item" id="step-4">
-          <div class="step-icon">🧪</div>
-          <div class="step-label">4. Esecuzione Reale e Cattura Output Terminale</div>
+          <div class="step-badge">04</div>
+          <div class="step-label">Esecuzione Reale e Cattura Output Terminale</div>
         </div>
         <div class="step-item" id="step-5">
-          <div class="step-icon">📝</div>
-          <div class="step-label">5. Redazione Relazione Dettagliata README.md</div>
+          <div class="step-badge">05</div>
+          <div class="step-label">Redazione Relazione Didattica README.md</div>
         </div>
       </div>
     </section>
@@ -330,7 +435,7 @@
               ✓ Compilazione g++: 0 Errori, 0 Warning
             </span>
             <span class="badge badge-info" id="badge-project-name">
-              📁 cartella: <strong id="res-folder-name">progetto</strong>
+              Cartella: <strong id="res-folder-name">progetto</strong>
             </span>
           </div>
           <h2 id="res-project-title">Esercizio Risolto</h2>
@@ -338,27 +443,30 @@
 
         <div class="results-actions">
           <button class="btn btn-secondary btn-sm" id="btn-copy-readme">
-            <span>📋 Copia Relazione</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span>Copia Relazione</span>
           </button>
           <button class="btn btn-secondary btn-sm" id="btn-print-doc">
-            <span>🖨️ Stampa / Salva PDF</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            <span>Stampa / PDF</span>
           </button>
           <a href="#" class="btn btn-primary btn-sm" id="btn-download-zip" download>
-            <span>📦 Scarica Progetto (.ZIP)</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Scarica Progetto (.ZIP)</span>
           </a>
         </div>
       </div>
 
       <!-- TABS -->
       <div class="tabs-nav" id="tabs-nav">
-        <button class="tab-btn active" data-tab="tab-readme">📄 README.md (Relazione)</button>
+        <button class="tab-btn active" data-tab="tab-readme">README.md (Relazione)</button>
         <button class="tab-btn" data-tab="tab-function-h">function.h</button>
         <button class="tab-btn" data-tab="tab-function-cpp">function.cpp</button>
         <button class="tab-btn" data-tab="tab-main-cpp">main.cpp</button>
         <button class="tab-btn" data-tab="tab-makefile">makefile</button>
         <button class="tab-btn" data-tab="tab-install-md">INSTALL.md</button>
-        <button class="tab-btn" data-tab="tab-terminal">💻 Terminale & Test</button>
-        <button class="tab-btn" data-tab="tab-files">📁 Tutti i File</button>
+        <button class="tab-btn" data-tab="tab-terminal">Terminale & Test</button>
+        <button class="tab-btn" data-tab="tab-files">Tutti i File</button>
       </div>
 
       <!-- TAB CONTENT PANES -->
@@ -457,56 +565,105 @@
 
   <footer class="app-footer">
     <div class="container footer-content">
-      <p><strong>CopiaPicchio!</strong></p>
+      <p><strong>CopiaPicchio</strong> • Risolutore Compiti di Informatica C++</p>
     </div>
   </footer>
 
-  <!-- ================= MODAL CREDITI ESAURITI & CONTATTA OWNER ================= -->
+  <!-- ================= MODAL SHOP CREDITI & PAGAMENTI AUTOMATICI (ALTERNATIVA A STRIPE) ================= -->
   <div id="credits-modal" class="modal-overlay hidden">
-    <div class="modal-card credits-modal-card">
-      <button class="modal-close-btn" id="btn-close-credits-modal" type="button">✕</button>
+    <div class="modal-card credits-shop-modal-card">
+      <button class="modal-close-btn" id="btn-close-credits-modal" type="button" title="Chiudi">✕</button>
+      
       <div class="modal-header text-center">
-        <div class="logo-badge warning-pulse">⚡</div>
-        <h2 id="credits-modal-title">Crediti Esauriti!</h2>
-        <p id="credits-modal-desc">Hai utilizzato tutti i crediti a disposizione per la risoluzione dei compiti.</p>
-      </div>
-      <div class="credits-info-box">
-        <div class="credits-rate">
-          <span class="rate-icon">💡</span>
-          <span><strong>1 Credito = 1 Risoluzione Completa</strong><br>Include: codice modulare C++ C3B, zero warning con <code>-Wall -Wconversion</code>, makefile e relazione passo per passo.</span>
+        <div class="shop-badge-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         </div>
-        <p class="credits-instructions">
-          Per acquistare ulteriori crediti o ricaricare il tuo account, contatta direttamente l'<strong>Owner / Amministratore</strong> di CopiaPicchio!:
+        <h2>Ricarica Crediti</h2>
+        <p>1 credito = 1 generazione completa con C++ modulare, zero warning e relazione README.</p>
+      </div>
+
+      <!-- Current Balance Banner -->
+      <div class="current-balance-banner">
+        <span>Il tuo saldo attuale:</span>
+        <strong id="modal-current-credits">1 Credito</strong>
+      </div>
+
+      <!-- Packages Grid -->
+      <div class="packages-grid" id="packages-grid">
+        <!-- Renderizzato da JavaScript in base a /api/payments/config -->
+      </div>
+
+      <!-- Payment Section -->
+      <div class="payment-checkout-section" id="payment-checkout-section">
+        <div class="payment-header-row">
+          <div>
+            <h4 class="payment-subheading">Metodo di Pagamento</h4>
+            <span class="payment-alternative-badge">Revolut Pay & Carte (Accredito Istantaneo)</span>
+          </div>
+          <div class="selected-package-summary">
+            <span id="selected-package-label">Studente (15 crediti)</span>
+            <strong id="selected-package-price">€6.99</strong>
+          </div>
+        </div>
+
+        <!-- Payment Actions -->
+        <div class="payment-buttons-stack" id="payment-buttons-stack">
+          <!-- Revolut Pay & Card (Default) -->
+          <button type="button" class="btn btn-revolut btn-block" id="btn-pay-revolut">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.8 4H5.2C4.5 4 4 4.5 4 5.2v13.6c0 .7.5 1.2 1.2 1.2h13.6c.7 0 1.2-.5 1.2-1.2V5.2c0-.7-.5-1.2-1.2-1.2zM12 16.5l-4-4h2.5V7.5h3v5H16l-4 4z"/></svg>
+            <span id="btn-revolut-text">Paga con Carta o Revolut Pay</span>
+          </button>
+
+          <div class="accepted-cards-row">
+            <span>💳 Accetta: <strong>Apple Pay, Google Pay, Postepay e qualsiasi Carta</strong></span>
+          </div>
+
+          <!-- Secondary Payment Options -->
+          <div class="secondary-pay-row">
+            <button type="button" class="btn btn-secondary btn-sm flex-1" id="btn-pay-paypal">
+              <span>Oppure Paga con PayPal</span>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm flex-1" id="btn-pay-instant">
+              <span>Test Accredito Istantaneo (Demo)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Revolut Confirmation Step (Mostrato dopo aver aperto il link) -->
+        <div class="revolut-confirm-box hidden" id="revolut-confirm-box">
+          <div class="revolut-confirm-header">
+            <div class="spinner-small"></div>
+            <div>
+              <strong>Pagamento aperto in una nuova scheda</strong>
+              <p>Completa il pagamento su Revolut con carta o Apple Pay, poi clicca qui sotto:</p>
+            </div>
+          </div>
+          <div class="revolut-ref-badge">
+            Causale / Riferimento: <code id="revolut-ref-code">CP-XXXX</code>
+          </div>
+          <button type="button" class="btn btn-primary btn-block mt-2" id="btn-revolut-confirm-done">
+            <span>✓ Ho pagato: Accredita i Miei Crediti</span>
+          </button>
+          <button type="button" class="btn-link text-muted mt-2" id="btn-revolut-cancel-step">
+            ← Annulla o scegli un altro pacchetto
+          </button>
+        </div>
+
+        <div id="payment-status-box" class="payment-status-box hidden"></div>
+
+        <p class="payment-security-note">
+          🔒 Pagamento istantaneo e sicuro. I crediti vengono aggiunti automaticamente al tuo profilo Supabase subito dopo la conferma.
         </p>
-        <div class="owner-contact-cards">
-          <div class="contact-card">
-            <span class="contact-icon">💬</span>
-            <div class="contact-details">
-              <strong>Telegram</strong>
-              <span>Scrivi all'owner per ricevere una ricarica immediata di crediti.</span>
-            </div>
-          </div>
-          <div class="contact-card">
-            <span class="contact-icon">📱</span>
-            <div class="contact-details">
-              <strong>WhatsApp / Di persona</strong>
-              <span>Comunica il tuo username o email per farti aggiungere nuove generazioni.</span>
-            </div>
-          </div>
-        </div>
       </div>
-      <div class="modal-actions mt-3">
-        <button type="button" class="btn btn-primary btn-block" id="btn-dismiss-credits">Ho capito</button>
-      </div>
+
     </div>
   </div>
 
   <!-- ================= MODAL CREAZIONE UTENTE (ADMIN) ================= -->
   <div id="create-user-modal" class="modal-overlay hidden">
     <div class="modal-card">
-      <button class="modal-close-btn" id="btn-close-create-user" type="button">✕</button>
+      <button class="modal-close-btn" id="btn-close-create-user" type="button" title="Chiudi">✕</button>
       <div class="modal-header">
-        <div class="logo-badge">➕</div>
         <h2>Crea Nuovo Utente</h2>
         <p>Aggiungi un account su Supabase con crediti iniziali.</p>
       </div>

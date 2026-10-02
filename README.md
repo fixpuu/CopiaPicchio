@@ -27,10 +27,21 @@
   - `INSTALL.md` (istruzioni operative standard)
   - `README.md` (relazione con stile purple `:not(pre) > code` e metadati)
   - `COPYING` & `gpl-3.0.txt` (licenza didattica GNU GPL v3)
+- ✉️ **Registrazione Utente con Codice OTP via Resend**:
+  - Gli utenti possono registrarsi inserendo email e password.
+  - Generazione di un codice OTP numerico a 6 cifre inviato via email con **Resend**.
+  - Alla verifica dell'OTP, l'account viene creato su Supabase e viene accreditato **1 credito gratuito**.
+- 💳 **Sistema Pagamenti Automatico (Alternativa a Stripe)**:
+  - Shop crediti integrato: pacchetti Starter (5 crediti), Studente (15 crediti), Pro Esami (40 crediti), Classe (100 crediti).
+  - Supporto per gateway alternativi a Stripe: **PayPal (Smart Checkout & Carte)**, **Lemon Squeezy**, e modalità demo per accredito istantaneo.
+  - Accredito in tempo reale dei crediti su Supabase senza bisogno di ricaricare la pagina.
+- 🎨 **Interfaccia Pulita e Professionale**:
+  - Rimossi gradienti aggressivi e pulsanti con emoji stile "template generato da IA".
+  - Design raffinato con superfici solide, micro-icone SVG inline, badge numerati e tipografia rifinita.
 - ⚡ **Sistema a Crediti (1 Credito = 1 Generazione)**:
   - I nuovi utenti registrati iniziano automaticamente con **1 credito gratuito**.
   - Ogni generazione di esercizio andata a buon fine scala **1 credito**.
-  - Al termine dei crediti (0 crediti), appare la **schermata di blocco** che invita a contattare l'Owner per ricaricare.
+  - Al termine dei crediti (0 crediti), appare la finestra per acquistare ricariche o gestire il saldo.
 - 🛡️ **Admin Dashboard (Riservata a 2 Account)**:
   - Accessibile unicamente dai due account designati: `matty` e `zome`.
   - Visualizzazione in tempo reale di tutti gli utenti registrati su Supabase.
@@ -40,15 +51,15 @@
 - 🗂️ **Sezione "I Miei Compiti"**:
   - Storico compiti generati con ricerca immediata, riapertura in visualizzatore, anteprima e download zip.
   - Login automatico memorizzato nel browser.
-- 🔒 **Autenticazione con Supabase**:
-  - Autenticazione diretta via Supabase Auth senza form di auto-registrazione pubblica.
+- 🔒 **Autenticazione con Supabase & Resend**:
+  - Login diretto e registrazione con OTP verificato via email.
 
 ---
 
 ## 🔑 Autenticazione e Account Admin
 
-L'accesso è gestito tramite **Supabase Auth**:
-- Solo login: i nuovi studenti vengono creati dall'amministratore (dalla dashboard Supabase o direttamente dall'apposita modale nella Admin Dashboard).
+L'accesso e la registrazione sono gestiti tramite **Supabase Auth** e **Resend**:
+- **Registrazione con OTP**: gli studenti possono registrarsi autonomamente; ricevono un codice a 6 cifre via Resend prima della creazione dell'account.
 - I due account amministratori abilitati sono:
 
 | Nome Utente | Email Supabase | Ruolo |
