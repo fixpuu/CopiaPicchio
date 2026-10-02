@@ -38,9 +38,12 @@ body {
   font-family: var(--font-sans);
   line-height: 1.6;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 .container {
@@ -425,38 +428,46 @@ body {
   justify-content: flex-end;
 }
 
-/* ================= AUTH MODAL (LOGIN & REGISTRAZIONE OTP RESEND) ================= */
+/* ================= AUTH MODAL (LOGIN & REGISTRAZIONE DIRETTA) ================= */
 .modal-overlay {
   position: fixed;
   inset: 0;
   background-color: rgba(6, 8, 14, 0.85);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 1.25rem;
+  padding: 1rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   transition: opacity 0.2s ease;
 }
 
 .modal-overlay.hidden {
-  display: none;
+  display: none !important;
 }
 
 .modal-card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 14px;
-  padding: 1.85rem;
+  padding: 1.6rem;
   width: 100%;
   max-width: 440px;
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
   position: relative;
+  margin: auto;
 }
 
 .modal-header {
   text-align: center;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.15rem;
 }
 
 .brand-avatar-badge {
@@ -529,67 +540,6 @@ body {
   color: var(--text-dim);
   line-height: 1.4;
   text-align: center;
-}
-
-/* OTP Verification UI */
-.otp-notice-box {
-  background-color: rgba(37, 99, 235, 0.08);
-  border: 1px solid rgba(37, 99, 235, 0.25);
-  border-radius: 8px;
-  padding: 0.85rem;
-  text-align: center;
-  margin-bottom: 1.25rem;
-  font-size: 0.85rem;
-  color: #cbd5e1;
-}
-
-.otp-notice-icon {
-  font-size: 1.5rem;
-  margin-bottom: 0.2rem;
-}
-
-.highlight-email {
-  color: #93c5fd;
-  font-weight: 600;
-}
-
-.otp-input-box {
-  width: 100%;
-  height: 52px;
-  background-color: var(--bg-input);
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
-  color: #60a5fa;
-  font-family: var(--font-mono);
-  font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: 12px;
-  text-align: center;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.otp-input-box:focus {
-  border-color: var(--primary-border);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
-}
-
-.otp-resend-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  margin-top: 1rem;
-}
-
-.cooldown-text {
-  font-size: 0.8rem;
-  color: var(--text-dim);
-}
-
-.otp-back-row {
-  text-align: center;
-  margin-top: 0.75rem;
 }
 
 /* ================= INPUT & DROP ZONE SECTION ================= */
@@ -1288,7 +1238,7 @@ body {
 
 /* ================= MODAL SHOP CREDITI (ALTERNATIVA A STRIPE) ================= */
 .credits-shop-modal-card {
-  max-width: 680px !important;
+  max-width: 640px !important;
 }
 
 .shop-badge-icon {
@@ -1312,7 +1262,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
   font-size: 0.88rem;
 }
 
@@ -1325,21 +1275,24 @@ body {
 .packages-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  gap: 0.65rem;
+  margin-bottom: 1.15rem;
+  padding-top: 8px;
 }
 
 .package-card {
   background-color: var(--bg-input);
-  border: 1px solid var(--border-color);
+  border: 1.5px solid var(--border-color);
   border-radius: 10px;
-  padding: 1rem 0.85rem;
+  padding: 0.85rem 0.55rem 0.75rem;
   display: flex;
   flex-direction: column;
   cursor: pointer;
   transition: all 0.15s ease;
   position: relative;
   text-align: center;
+  user-select: none;
+  touch-action: manipulation;
 }
 
 .package-card:hover {
@@ -1349,8 +1302,8 @@ body {
 
 .package-card.selected {
   border-color: #3b82f6;
-  background-color: rgba(37, 99, 235, 0.08);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+  background-color: rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
 }
 
 .package-badge-tag {
@@ -1360,43 +1313,47 @@ body {
   transform: translateX(-50%);
   background-color: #2563eb;
   color: white;
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 700;
-  padding: 0.1rem 0.5rem;
+  padding: 0.1rem 0.45rem;
   border-radius: 9999px;
   white-space: nowrap;
   letter-spacing: 0.02em;
 }
 
+.package-card.selected .package-badge-tag {
+  background-color: #3b82f6;
+}
+
 .package-name {
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   font-weight: 700;
   color: #f8fafc;
-  margin-top: 0.2rem;
-  margin-bottom: 0.4rem;
+  margin-top: 0.15rem;
+  margin-bottom: 0.25rem;
 }
 
 .package-credits {
-  font-size: 1.4rem;
+  font-size: 1.35rem;
   font-weight: 800;
   color: #60a5fa;
   line-height: 1.1;
 }
 
 .package-credits-lbl {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: var(--text-dim);
   text-transform: uppercase;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   font-weight: 600;
 }
 
 .package-price {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: #f1f5f9;
   margin-top: auto;
-  padding-top: 0.6rem;
+  padding-top: 0.45rem;
   border-top: 1px solid var(--border-color);
 }
 
@@ -1405,33 +1362,32 @@ body {
   background-color: rgba(14, 19, 32, 0.7);
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  padding: 1.15rem;
+  padding: 1rem;
 }
 
 .payment-header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
   gap: 0.5rem;
 }
 
 .payment-subheading {
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: #f8fafc;
 }
 
 .payment-alternative-badge {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   color: #34d399;
   background: rgba(16, 185, 129, 0.1);
-  padding: 0.15rem 0.45rem;
+  padding: 0.12rem 0.45rem;
   border-radius: 4px;
   border: 1px solid rgba(16, 185, 129, 0.2);
   display: inline-block;
-  margin-top: 0.2rem;
+  margin-top: 0.15rem;
 }
 
 .selected-package-summary {
@@ -1440,31 +1396,30 @@ body {
 
 .selected-package-summary span {
   display: block;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
 .selected-package-summary strong {
-  font-size: 1.2rem;
+  font-size: 1.18rem;
   color: #60a5fa;
 }
 
 .payment-buttons-stack {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.55rem;
 }
 
 .accepted-cards-row {
   text-align: center;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   color: var(--text-muted);
   background: rgba(255, 255, 255, 0.03);
-  padding: 0.35rem 0.5rem;
+  padding: 0.4rem 0.5rem;
   border-radius: 6px;
   border: 1px solid var(--border-color);
-  margin-top: -0.2rem;
-  margin-bottom: 0.2rem;
+  margin-top: 0.1rem;
 }
 
 .accepted-cards-row strong {
@@ -1477,69 +1432,138 @@ body {
   border-color: #2b8cf5;
   color: #ffffff;
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 6px rgba(0, 117, 235, 0.3);
+  min-height: 44px;
+  font-size: 0.9rem;
+  border-radius: 8px;
 }
 
-.btn-revolut:hover {
+.btn-revolut:hover, .btn-revolut:active {
   background-color: #0060c2;
   border-color: #0075eb;
 }
 
-.secondary-pay-row {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
-  flex-wrap: wrap;
-}
-
-/* Revolut Confirmation Step */
+/* Revolut Confirmation Step (Guidato in 3 Step chiari) */
 .revolut-confirm-box {
   background: rgba(15, 23, 42, 0.95);
   border: 1px solid var(--border-color);
-  border-radius: 9px;
-  padding: 1.15rem;
-  margin-top: 0.5rem;
-  text-align: center;
-}
-
-.revolut-confirm-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  border-radius: 10px;
+  padding: 0.9rem;
+  margin-top: 0.4rem;
   text-align: left;
-  margin-bottom: 0.85rem;
-  font-size: 0.84rem;
-  line-height: 1.4;
-  color: #cbd5e1;
 }
 
-.spinner-small {
+.revolut-confirm-intro {
+  margin-bottom: 0.75rem;
+}
+
+.revolut-confirm-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.revolut-step-item {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 0.7rem 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.revolut-step-item .step-num {
   width: 22px;
   height: 22px;
-  border: 2px solid rgba(59, 130, 246, 0.2);
-  border-top-color: #3b82f6;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.revolut-step-item .step-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.revolut-step-item .step-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 0.35rem;
+}
+
+.revolut-step-item .step-hint {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-top: 0.3rem;
+  line-height: 1.35;
 }
 
 .revolut-ref-badge {
-  background: #0e1320;
-  border: 1px solid #2d3b55;
-  padding: 0.45rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #0b0f19;
+  border: 1px solid rgba(59, 130, 246, 0.4);
   border-radius: 6px;
-  font-size: 0.82rem;
-  color: #94a3b8;
-  display: inline-block;
-  margin-bottom: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  gap: 0.5rem;
 }
 
 .revolut-ref-badge code {
   color: #60a5fa;
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 0.95rem;
-  margin-left: 0.35rem;
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+}
+
+.btn-copy-code {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #93c5fd;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.btn-copy-code:hover, .btn-copy-code:active {
+  background: #2563eb;
+  color: #fff;
+}
+
+.revolut-confirm-box input.form-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.75rem;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color);
+  color: #fff;
+  font-size: 16px; /* prevent iOS zoom */
+}
+
+.revolut-confirm-box input.form-input:focus {
+  border-color: #3b82f6;
+  outline: none;
 }
 
 .payment-status-box {
@@ -1554,10 +1578,10 @@ body {
 }
 
 .payment-security-note {
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   color: var(--text-dim);
   text-align: center;
-  margin-top: 0.85rem;
+  margin-top: 0.75rem;
   line-height: 1.4;
 }
 
@@ -1857,20 +1881,29 @@ body {
 /* Modal Close Button */
 .modal-close-btn {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
-  font-size: 1.15rem;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  font-size: 1.1rem;
   cursor: pointer;
-  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
-  transition: color 0.15s;
+  transition: all 0.15s ease;
+  z-index: 50;
+  touch-action: manipulation;
 }
 
-.modal-close-btn:hover {
+.modal-close-btn:hover, .modal-close-btn:active {
+  background: rgba(255, 255, 255, 0.2);
   color: #fff;
+  border-color: #475569;
 }
 
 .modal-actions-row {
@@ -1894,31 +1927,53 @@ body {
 .hidden { display: none !important; }
 .mt-2 { margin-top: 0.5rem; }
 .mt-3 { margin-top: 0.85rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.text-center { text-align: center; }
 
-/* ================= RESPONSIVE ================= */
+/* ================= RESPONSIVE SYSTEM (MOBILE FIRST & DESKTOP) ================= */
+
 @media (max-width: 820px) {
   .input-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .header-content {
     flex-wrap: wrap;
+    row-gap: 0.45rem;
     justify-content: space-between;
+  }
+
+  .brand {
+    order: 1;
+  }
+
+  .header-status {
+    order: 2;
+    gap: 0.4rem;
   }
 
   .main-nav {
     order: 3;
     width: 100%;
-    margin-top: 0.4rem;
+    margin-top: 0.25rem;
+    display: flex;
+    background: rgba(14, 19, 32, 0.65);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 3px;
   }
 
   .nav-tab {
     flex: 1;
     justify-content: center;
+    min-height: 38px;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.82rem;
   }
 
   .packages-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 
   .card {
@@ -1942,43 +1997,413 @@ body {
   .results-header {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.75rem;
   }
 
   .results-actions {
     width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 
   .results-actions .btn {
     flex: 1;
-    font-size: 0.78rem;
-    padding: 0.45rem;
-    min-height: 34px;
+    font-size: 0.82rem;
+    padding: 0.5rem;
+    min-height: 38px;
   }
 
   .admin-stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 }
 
-@media (max-width: 480px) {
-  .packages-grid {
-    grid-template-columns: 1fr;
+/* Smartphone & Piccoli Schermi (fino a 640px) */
+@media (max-width: 640px) {
+  /* Previene lo zoom automatico sgradevole su iOS Safari */
+  input, select, textarea, .form-group input, .form-input, .text-zone-wrapper textarea {
+    font-size: 16px !important;
   }
 
-  .admin-stats-grid {
-    grid-template-columns: 1fr;
+  .container {
+    padding: 0 0.75rem;
   }
 
-  .ai-status-pill .status-label {
-    display: none;
+  /* Header pulito a 2 righe su cellulare */
+  .app-header {
+    padding: 0.45rem 0 0.35rem;
+  }
+
+  .brand-logo {
+    font-size: 1.35rem;
   }
 
   .brand-text h1 {
+    font-size: 1.1rem;
+  }
+
+  .ai-status-pill {
+    display: none !important;
+  }
+
+  .user-profile {
+    padding: 0.25rem 0.5rem;
+    gap: 0.35rem;
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .user-avatar-circle {
+    width: 26px;
+    height: 26px;
+    font-size: 0.75rem;
+  }
+
+  .credits-pill {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.78rem;
+    gap: 0.35rem;
+  }
+
+  .credits-recharge-badge {
+    padding: 0.12rem 0.35rem;
+    font-size: 0.68rem;
+  }
+
+  /* Modali su Mobile: mai tagliati, scrollabili e comodi */
+  .modal-overlay {
+    padding: 0.5rem;
+    align-items: flex-end;
+  }
+
+  .modal-card {
+    border-radius: 18px 18px 12px 12px;
+    padding: 1.25rem 0.9rem 1.35rem;
+    max-height: calc(100dvh - 1rem);
+    max-width: 100%;
+  }
+
+  .credits-shop-modal-card {
+    padding: 1.15rem 0.85rem 1.25rem !important;
+  }
+
+  .modal-close-btn {
+    top: 0.65rem;
+    right: 0.65rem;
+  }
+
+  .modal-header h2 {
     font-size: 1.15rem;
+  }
+
+  .modal-header p {
+    font-size: 0.78rem;
+  }
+
+  .current-balance-banner {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+    margin-bottom: 0.75rem;
+  }
+
+  /* Griglia pacchetti 2x2 compatta: tutti i 4 pacchetti visibili insieme */
+  .packages-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.55rem;
+    margin-bottom: 0.85rem;
+    padding-top: 6px;
+  }
+
+  .package-card {
+    padding: 0.75rem 0.45rem 0.65rem;
+    border-radius: 9px;
+  }
+
+  .package-badge-tag {
+    font-size: 0.6rem;
+    padding: 0.08rem 0.4rem;
+    top: -8px;
+  }
+
+  .package-name {
+    font-size: 0.78rem;
+    margin-bottom: 0.15rem;
+  }
+
+  .package-credits {
+    font-size: 1.25rem;
+  }
+
+  .package-credits-lbl {
+    font-size: 0.62rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .package-price {
+    font-size: 0.98rem;
+    padding-top: 0.35rem;
+  }
+
+  /* Checkout Ricarica Mobile */
+  .payment-checkout-section {
+    padding: 0.75rem 0.65rem;
+    border-radius: 9px;
+  }
+
+  .payment-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+    margin-bottom: 0.65rem;
+  }
+
+  .selected-package-summary {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.45rem;
+    text-align: left;
+  }
+
+  .selected-package-summary span {
+    font-size: 0.75rem;
+  }
+
+  .selected-package-summary strong {
+    font-size: 1.15rem;
+  }
+
+  .btn-revolut {
+    min-height: 48px;
+    font-size: 0.88rem;
+    width: 100%;
+  }
+
+  .accepted-cards-row {
+    font-size: 0.7rem;
+    padding: 0.35rem 0.45rem;
+  }
+
+  .revolut-confirm-box {
+    padding: 0.75rem 0.65rem;
+  }
+
+  .revolut-step-item {
+    padding: 0.6rem 0.65rem;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .revolut-step-item .step-num {
+    width: 20px;
+    height: 20px;
+    font-size: 0.68rem;
+  }
+
+  .revolut-step-item .step-label {
+    font-size: 0.78rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .revolut-step-item .step-hint {
+    font-size: 0.7rem;
+  }
+
+  .revolut-ref-badge {
+    padding: 0.35rem 0.55rem;
+  }
+
+  .revolut-ref-badge code {
+    font-size: 0.95rem;
+  }
+
+  .btn-copy-code {
+    padding: 0.22rem 0.45rem;
+    font-size: 0.72rem;
+  }
+
+  /* Form Consegna Compito su Mobile */
+  .card {
+    padding: 0.95rem 0.75rem;
+    border-radius: 12px;
+  }
+
+  .section-title h2 {
+    font-size: 1.1rem;
+  }
+
+  .section-title p {
+    font-size: 0.78rem;
+  }
+
+  .drop-zone {
+    min-height: 125px;
+    padding: 0.85rem 0.65rem;
+  }
+
+  .drop-title {
+    font-size: 0.82rem;
+  }
+
+  .drop-subtitle {
+    font-size: 0.68rem;
+  }
+
+  .text-zone-wrapper textarea {
+    min-height: 125px;
+    padding: 0.65rem;
+  }
+
+  .accordion-toggle {
+    padding: 0.55rem 0.75rem;
+    font-size: 0.8rem;
   }
 
   .fields-row {
     flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .btn-mobile-block {
+    width: 100%;
+    min-height: 48px;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  /* Results Workspace su Mobile */
+  .results-header {
+    gap: 0.65rem;
+  }
+
+  .meta-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .results-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  #btn-download-zip {
+    order: 1;
+    width: 100%;
+    min-height: 44px;
+    font-size: 0.88rem;
+    font-weight: 600;
+  }
+
+  #btn-copy-readme, #btn-print-doc {
+    order: 2;
+    width: 100%;
+    min-height: 38px;
+    font-size: 0.82rem;
+  }
+
+  .tabs-nav {
+    padding-bottom: 0.35rem;
+    gap: 0.3rem;
+  }
+
+  .tabs-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-btn {
+    padding: 0.45rem 0.65rem;
+    font-size: 0.78rem;
+  }
+
+  .markdown-preview {
+    padding: 0.9rem;
+    font-size: 0.88rem;
+    max-height: 440px;
+  }
+
+  .code-box, .raw-code-box {
+    padding: 0.75rem;
+    font-size: 0.8rem;
+    max-height: 360px;
+  }
+
+  .terminal-window {
+    border-radius: 8px;
+  }
+
+  .terminal-body {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    max-height: 280px;
+  }
+
+  /* Admin Dashboard Mobile */
+  .admin-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.5rem;
+  }
+
+  .stat-card {
+    padding: 0.6rem 0.65rem;
+    gap: 0.45rem;
+  }
+
+  .stat-icon-wrapper {
+    width: 32px;
+    height: 32px;
+  }
+
+  .stat-data .stat-val {
+    font-size: 1.1rem;
+  }
+
+  .stat-data .stat-lbl {
+    font-size: 0.65rem;
+  }
+
+  .admin-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 8px;
+  }
+
+  .admin-table {
+    min-width: 560px;
+    font-size: 0.78rem;
+  }
+}
+
+/* Schermi Ultra-Compatti (<= 380px) */
+@media (max-width: 380px) {
+  .brand-text h1 {
+    font-size: 0.98rem;
+  }
+
+  .credits-pill {
+    padding: 0.28rem 0.45rem;
+  }
+
+  .credits-count {
+    font-size: 0.74rem;
+  }
+
+  .credits-recharge-badge {
+    font-size: 0.64rem;
+  }
+
+  .package-credits {
+    font-size: 1.15rem;
+  }
+
+  .package-price {
+    font-size: 0.92rem;
   }
 }
 

@@ -6,9 +6,6 @@ let selectedPhotoFile = null;
 let sessionToken = localStorage.getItem('cp_session_token') || null;
 
 // Auth State & Elements
-let pendingRegistrationEmail = null;
-let resendTimerInterval = null;
-
 const authModal = document.getElementById('auth-modal');
 const authModalTitle = document.getElementById('auth-modal-title');
 const authModalSubtitle = document.getElementById('auth-modal-subtitle');
@@ -31,17 +28,6 @@ const registerUsernameInput = document.getElementById('register-username');
 const registerPasswordInput = document.getElementById('register-password');
 const registerError = document.getElementById('register-error');
 const btnRegisterSubmit = document.getElementById('btn-register-submit');
-
-const otpVerifyForm = document.getElementById('otp-verify-form');
-const otpDisplayEmail = document.getElementById('otp-display-email');
-const otpSandboxBanner = document.getElementById('otp-sandbox-banner');
-const otpSandboxText = document.getElementById('otp-sandbox-text');
-const otpCodeInput = document.getElementById('otp-code-input');
-const otpVerifyError = document.getElementById('otp-verify-error');
-const btnOtpVerifySubmit = document.getElementById('btn-otp-verify-submit');
-const btnResendOtp = document.getElementById('btn-resend-otp');
-const otpCooldownTimer = document.getElementById('otp-cooldown-timer');
-const btnBackToRegister = document.getElementById('btn-back-to-register');
 
 // Navigation Tabs & Sections
 const navBtnNuovo = document.getElementById('nav-btn-nuovo');
@@ -239,13 +225,12 @@ function showAuthModal() {
   adminSection?.classList.add('hidden');
 }
 
-// Switching tra Login e Registrazione OTP
+// Switching tra Login e Registrazione Diretta
 function switchToLoginView() {
   tabBtnLogin?.classList.add('active');
   tabBtnRegister?.classList.remove('active');
   loginForm?.classList.remove('hidden');
   registerForm?.classList.add('hidden');
-  otpVerifyForm?.classList.add('hidden');
   loginError?.classList.add('hidden');
   if (authModalTitle) authModalTitle.textContent = 'Accedi a CopiaPicchio';
   if (authModalSubtitle) authModalSubtitle.textContent = 'Risolutore didattico di informatica C++ ad alta fedeltà.';
@@ -256,10 +241,9 @@ function switchToRegisterView() {
   tabBtnLogin?.classList.remove('active');
   registerForm?.classList.remove('hidden');
   loginForm?.classList.add('hidden');
-  otpVerifyForm?.classList.add('hidden');
   registerError?.classList.add('hidden');
   if (authModalTitle) authModalTitle.textContent = 'Crea Account Studente';
-  if (authModalSubtitle) authModalSubtitle.textContent = 'Registrati gratis con verifica OTP inviata tramite Resend.';
+  if (authModalSubtitle) authModalSubtitle.textContent = 'Registrati gratis in 5 secondi e ricevi subito 1 credito.';
 }
 
 tabBtnLogin?.addEventListener('click', switchToLoginView);
@@ -296,7 +280,7 @@ loginForm?.addEventListener('submit', async (e) => {
   }
 });
 
-// Submit Registrazione (Step 1: Invia OTP via Resend)
+// Submit Registrazione Diretta (Senza OTP)
 registerForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
   registerError?.classList.add('hidden');
@@ -306,10 +290,11 @@ registerForm?.addEventListener('submit', async (e) => {
   const password = registerPasswordInput.value;
 
   btnRegisterSubmit.disabled = true;
-  btnRegisterSubmit.querySelector('span').textContent = 'Invio codice in corso...';
+  const originalHtml = btnRegisterSubmit.innerHTML;
+  btnRegisterSubmit.innerHTML = '<span>Creazione account...</span>';
 
   try {
-    const res = await fetch('/api/auth/register-request', {
+    const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, username, password })
@@ -317,141 +302,24 @@ registerForm?.addEventListener('submit', async (e) => {
 
     const data = await res.json();
     btnRegisterSubmit.disabled = false;
-    btnRegisterSubmit.querySelector('span').textContent = 'Invia Codice OTP via Email';
+    btnRegisterSubmit.innerHTML = originalHtml;
 
     if (!res.ok || !data.success) {
-      registerError.textContent = data.error || 'Impossibile inviare il codice OTP.';
+      registerError.textContent = data.error || 'Impossibile completare la registrazione.';
       registerError.classList.remove('hidden');
       return;
     }
 
-    // Passaggio a Step 2: Inserimento codice OTP
-    pendingRegistrationEmail = data.email || email;
-    registerForm.classList.add('hidden');
-    otpVerifyForm.classList.remove('hidden');
-    otpDisplayEmail.textContent = pendingRegistrationEmail;
-    otpCodeInput.value = '';
-    otpVerifyError.classList.add('hidden');
-
-    if (data.simulated && data.note) {
-      otpSandboxBanner.classList.remove('hidden');
-      otpSandboxText.textContent = data.note;
-      if (data.testOtp) {
-        otpCodeInput.value = data.testOtp;
-      }
-    } else {
-      otpSandboxBanner.classList.add('hidden');
-    }
-
-    startOtpCooldown(30);
-    showToast(`Codice OTP inviato a ${pendingRegistrationEmail}!`, 'success');
-    setTimeout(() => otpCodeInput.focus(), 200);
+    // Registrazione avvenuta: login immediato e notifica
+    setAuthenticatedUser(data, data.sessionToken);
+    showToast(data.message || '🎉 Benvenuto su CopiaPicchio! Hai ricevuto 1 credito omaggio.', 'success');
 
   } catch (err) {
     btnRegisterSubmit.disabled = false;
-    btnRegisterSubmit.querySelector('span').textContent = 'Invia Codice OTP via Email';
+    btnRegisterSubmit.innerHTML = originalHtml;
     registerError.textContent = 'Errore di comunicazione con il server.';
     registerError.classList.remove('hidden');
   }
-});
-
-// Submit Verifica OTP (Step 2)
-otpVerifyForm?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  otpVerifyError?.classList.add('hidden');
-
-  const otp = otpCodeInput.value.trim();
-  if (!otp || otp.length !== 6) {
-    otpVerifyError.textContent = 'Inserisci il codice numerico a 6 cifre inviato via email.';
-    otpVerifyError.classList.remove('hidden');
-    return;
-  }
-
-  btnOtpVerifySubmit.disabled = true;
-  btnOtpVerifySubmit.querySelector('span').textContent = 'Verifica in corso...';
-
-  try {
-    const res = await fetch('/api/auth/verify-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingRegistrationEmail, otp })
-    });
-
-    const data = await res.json();
-    btnOtpVerifySubmit.disabled = false;
-    btnOtpVerifySubmit.querySelector('span').textContent = 'Verifica e Completa Registrazione';
-
-    if (!res.ok || !data.success) {
-      otpVerifyError.textContent = data.error || 'Codice OTP non valido o scaduto.';
-      otpVerifyError.classList.remove('hidden');
-      return;
-    }
-
-    // Registrazione avvenuta con successo
-    setAuthenticatedUser(data, data.sessionToken);
-    showToast('🎉 Registrazione completata! Hai ricevuto 1 credito omaggio.', 'success');
-
-  } catch (err) {
-    btnOtpVerifySubmit.disabled = false;
-    btnOtpVerifySubmit.querySelector('span').textContent = 'Verifica e Completa Registrazione';
-    otpVerifyError.textContent = 'Errore durante la verifica del codice.';
-    otpVerifyError.classList.remove('hidden');
-  }
-});
-
-// Reinvia Codice OTP
-btnResendOtp?.addEventListener('click', async () => {
-  if (!pendingRegistrationEmail) return;
-  try {
-    btnResendOtp.disabled = true;
-    const res = await fetch('/api/auth/resend-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingRegistrationEmail })
-    });
-    const data = await res.json();
-    if (res.ok && data.success) {
-      showToast('Nuovo codice OTP inviato via email!', 'info');
-      if (data.simulated && data.note) {
-        otpSandboxBanner.classList.remove('hidden');
-        otpSandboxText.textContent = data.note;
-        if (data.testOtp) otpCodeInput.value = data.testOtp;
-      }
-      startOtpCooldown(30);
-    } else {
-      showToast(data.error || 'Errore reinvio codice', 'error');
-      btnResendOtp.disabled = false;
-    }
-  } catch (err) {
-    showToast('Errore di connessione', 'error');
-    btnResendOtp.disabled = false;
-  }
-});
-
-function startOtpCooldown(seconds) {
-  if (resendTimerInterval) clearInterval(resendTimerInterval);
-  let remaining = seconds;
-  btnResendOtp.disabled = true;
-  otpCooldownTimer.classList.remove('hidden');
-  otpCooldownTimer.textContent = `(attendi ${remaining}s)`;
-
-  resendTimerInterval = setInterval(() => {
-    remaining--;
-    if (remaining <= 0) {
-      clearInterval(resendTimerInterval);
-      btnResendOtp.disabled = false;
-      otpCooldownTimer.classList.add('hidden');
-    } else {
-      otpCooldownTimer.textContent = `(attendi ${remaining}s)`;
-    }
-  }, 1000);
-}
-
-// Torna indietro da OTP a Registrazione
-btnBackToRegister?.addEventListener('click', () => {
-  if (resendTimerInterval) clearInterval(resendTimerInterval);
-  otpVerifyForm.classList.add('hidden');
-  registerForm.classList.remove('hidden');
 });
 
 // Logout
@@ -551,6 +419,33 @@ btnBannerRecharge?.addEventListener('click', showCreditsModal);
 btnCloseCreditsModal?.addEventListener('click', hideCreditsModal);
 
 // Pagamento Revolut Pay & Tutte le Carte
+const btnCopyRevolutCode = document.getElementById('btn-copy-revolut-code');
+const copyCodeText = document.getElementById('copy-code-text');
+
+btnCopyRevolutCode?.addEventListener('click', async () => {
+  const code = revolutRefCode?.textContent?.trim();
+  if (!code) return;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(code);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = code;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    if (copyCodeText) copyCodeText.textContent = '✓ Copiato!';
+    showToast(`Causale ${code} copiata negli appunti!`, 'success');
+    setTimeout(() => {
+      if (copyCodeText) copyCodeText.textContent = 'Copia';
+    }, 2500);
+  } catch (err) {
+    showToast(`Causale: ${code}`, 'info');
+  }
+});
+
 btnPayRevolut?.addEventListener('click', async () => {
   if (!selectedPackage) return;
   if (!currentUser) {
@@ -558,9 +453,6 @@ btnPayRevolut?.addEventListener('click', async () => {
     showAuthModal();
     return;
   }
-
-  // Apri la nuova scheda IMMEDIATAMENTE durante il click per non essere bloccati dal popup-blocker
-  const payWindow = window.open('about:blank', '_blank');
 
   setPaymentLoading(true, 'Generazione link protetto Revolut...');
 
@@ -577,7 +469,6 @@ btnPayRevolut?.addEventListener('click', async () => {
     setPaymentLoading(false);
 
     if (!orderRes.ok || !orderData.success) {
-      if (payWindow) payWindow.close();
       throw new Error(orderData.error || 'Errore creazione ordine.');
     }
 
@@ -589,12 +480,7 @@ btnPayRevolut?.addEventListener('click', async () => {
       paymentUrl
     };
 
-    // Reindirizza la scheda aperta su revolut.me
-    if (payWindow && paymentUrl) {
-      payWindow.location.href = paymentUrl;
-    }
-
-    // Aggiorna anche il link diretto di fallback nel modal
+    // Aggiorna il link diretto nel modal
     if (revolutDirectLink && paymentUrl) {
       revolutDirectLink.href = paymentUrl;
       revolutDirectLink.innerHTML = `<span>🔗 Apri Revolut.me (€${selectedPackage.price.toFixed(2)})</span>`;
@@ -605,11 +491,16 @@ btnPayRevolut?.addEventListener('click', async () => {
     revolutConfirmBox?.classList.remove('hidden');
     if (revolutRefCode) revolutRefCode.textContent = reference || `CP-${orderId.slice(-4)}`;
     if (revolutSenderNote) revolutSenderNote.value = '';
+    if (copyCodeText) copyCodeText.textContent = 'Copia';
 
-    showToast('Scheda Revolut aperta! Effettua il pagamento e invia la notifica.', 'info');
+    // Su desktop prova ad aprire la scheda se non bloccata; su mobile l'utente tocca direttamente il pulsante al punto 2
+    try {
+      window.open(paymentUrl, '_blank');
+    } catch (_) {}
+
+    showToast('Segui i passaggi per completare la ricarica!', 'info');
 
   } catch (err) {
-    if (payWindow) payWindow.close();
     setPaymentLoading(false);
     showToast(`Errore: ${err.message}`, 'error');
   }

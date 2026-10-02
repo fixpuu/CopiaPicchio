@@ -18,7 +18,7 @@
 </head>
 <body>
 
-  <!-- ================= AUTH MODAL (LOGIN & REGISTRAZIONE OTP RESEND) ================= -->
+  <!-- ================= AUTH MODAL (LOGIN & REGISTRAZIONE DIRETTA SENZA OTP) ================= -->
   <div id="auth-modal" class="modal-overlay">
     <div class="modal-card auth-modal-card">
       <div class="modal-header">
@@ -50,15 +50,15 @@
         <div id="login-error" class="alert-error hidden"></div>
 
         <button type="submit" class="btn btn-primary btn-block" id="btn-login-submit">
-          <span>Accedi</span>
+          <span>Accedi al Tuo Account</span>
         </button>
 
         <p class="auth-switch-hint">
-          Non hai ancora un account? <a href="#" id="link-to-register">Registrati ora con OTP</a>
+          Non hai ancora un account? <a href="#" id="link-to-register">Registrati gratis (1 credito in omaggio)</a>
         </p>
       </form>
 
-      <!-- 2. REGISTER FORM - STEP 1: Richiesta OTP -->
+      <!-- 2. REGISTER FORM (REGISTRAZIONE DIRETTA SENZA OTP) -->
       <form id="register-form" class="hidden">
         <div class="form-group">
           <label for="register-email">Email Personale o Scolastica *</label>
@@ -78,57 +78,17 @@
         <div id="register-error" class="alert-error hidden"></div>
 
         <button type="submit" class="btn btn-primary btn-block" id="btn-register-submit">
-          <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-          <span>Invia Codice OTP via Email</span>
+          <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          <span>Registrati e Ricevi 1 Credito</span>
         </button>
 
         <p class="auth-notice mt-2">
-          Riceverai un codice OTP a 6 cifre via email tramite <strong>Resend</strong> per convalidare il tuo account e sbloccare 1 credito omaggio.
+          ⚡ <strong>Attivazione immediata</strong>: nessun codice OTP o attesa email. Ricevi subito 1 credito omaggio per risolvere il tuo compito.
         </p>
 
         <p class="auth-switch-hint">
           Hai già un account? <a href="#" id="link-to-login">Accedi qui</a>
         </p>
-      </form>
-
-      <!-- 3. OTP VERIFY FORM - STEP 2: Convalida Codice -->
-      <form id="otp-verify-form" class="hidden">
-        <div class="otp-notice-box">
-          <div class="otp-notice-icon">✉️</div>
-          <p>
-            Abbiamo inviato un codice OTP di verifica a:<br>
-            <strong id="otp-display-email" class="highlight-email">studente@scuola.it</strong>
-          </p>
-        </div>
-
-        <div id="otp-sandbox-banner" class="alert-box alert-info-box hidden">
-          <span class="alert-icon">ℹ️</span>
-          <span id="otp-sandbox-text">Modalità di prova attiva.</span>
-        </div>
-
-        <div class="form-group">
-          <label for="otp-code-input" class="text-center">Inserisci il Codice a 6 Cifre</label>
-          <input type="text" id="otp-code-input" class="otp-input-box" placeholder="••••••" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" required autocomplete="one-time-code">
-        </div>
-
-        <div id="otp-verify-error" class="alert-error hidden"></div>
-
-        <button type="submit" class="btn btn-primary btn-block" id="btn-otp-verify-submit">
-          <span>Verifica e Completa Registrazione</span>
-        </button>
-
-        <div class="otp-resend-row">
-          <button type="button" class="btn-link" id="btn-resend-otp">
-            Non hai ricevuto il codice? Reinvia
-          </button>
-          <span id="otp-cooldown-timer" class="cooldown-text hidden">(attendi 30s)</span>
-        </div>
-
-        <div class="otp-back-row">
-          <button type="button" class="btn-link text-muted" id="btn-back-to-register">
-            ← Modifica indirizzo email
-          </button>
-        </div>
       </form>
     </div>
   </div>
@@ -652,42 +612,57 @@
           </div>
         </div>
 
-        <!-- Revolut Confirmation Step -->
+        <!-- Revolut Confirmation Step (Guidato in 3 Step chiari e mobile-friendly) -->
         <div class="revolut-confirm-box hidden" id="revolut-confirm-box">
-          <div class="revolut-confirm-header">
-            <div class="spinner-small" style="display: none;"></div>
-            <div>
-              <strong>Pagamento tramite Revolut.me</strong>
-              <p>Completa il pagamento sicuro tramite Revolut con carta, Apple Pay o conto Revolut:</p>
+          <div class="revolut-confirm-intro">
+            <span class="revolut-confirm-title">Completa la Ricarica in 3 Semplici Passaggi:</span>
+          </div>
+
+          <!-- Step 1: Causale -->
+          <div class="revolut-step-item">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <span class="step-label">Copia la Causale obbligatoria:</span>
+              <div class="revolut-ref-badge">
+                <code id="revolut-ref-code">CP-XXXX</code>
+                <button type="button" class="btn-copy-code" id="btn-copy-revolut-code" title="Copia codice causale">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <span id="copy-code-text">Copia</span>
+                </button>
+              </div>
+              <small class="step-hint">Incolla questo codice nella nota del pagamento Revolut.</small>
             </div>
           </div>
 
-          <div style="margin: 0.75rem 0; text-align: center;">
-            <a id="revolut-direct-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-revolut btn-block" style="text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px;">
-              <span>🔗 Clicca qui per aprire Revolut.me</span>
-            </a>
-            <small style="display: block; margin-top: 4px; color: var(--text-muted); font-size: 0.78rem;">
-              (Se la finestra non si è aperta automaticamente, aprila dal link qui sopra)
-            </small>
+          <!-- Step 2: Link Revolut -->
+          <div class="revolut-step-item">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <span class="step-label">Apri Revolut e invia l'importo:</span>
+              <a id="revolut-direct-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-revolut btn-block">
+                <span>🔗 Apri Revolut.me per Pagare</span>
+              </a>
+              <small class="step-hint">Puoi pagare con Carta di credito/debito, Apple Pay o conto Revolut.</small>
+            </div>
           </div>
 
-          <div class="revolut-ref-badge" style="margin: 0.8rem 0;">
-            Causale / Riferimento da inserire: <code id="revolut-ref-code">CP-XXXX</code>
+          <!-- Step 3: Notifica -->
+          <div class="revolut-step-item">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <span class="step-label">Il tuo nome o @revtag (per velocizzare la verifica):</span>
+              <input type="text" id="revolut-sender-note" class="form-input" placeholder="Es. @mariorossi oppure Mario R.">
+              <button type="button" class="btn btn-primary btn-block mt-2" id="btn-revolut-confirm-done">
+                <span>✓ Ho Inviato il Pagamento (Registra Ricarica)</span>
+              </button>
+            </div>
           </div>
 
-          <div class="form-group" style="margin: 0.8rem 0; text-align: left;">
-            <label for="revolut-sender-note" style="display: block; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 4px;">
-              Il tuo nome o @revtag su Revolut (per velocizzare la verifica):
-            </label>
-            <input type="text" id="revolut-sender-note" class="form-input" placeholder="Es. @mariorossi oppure Mario R." style="width: 100%; box-sizing: border-box; padding: 0.55rem 0.75rem; border-radius: 6px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); color: #fff;">
+          <div class="revolut-back-row text-center mt-2">
+            <button type="button" class="btn-link text-muted" id="btn-revolut-cancel-step">
+              ← Scegli un altro pacchetto
+            </button>
           </div>
-
-          <button type="button" class="btn btn-primary btn-block mt-2" id="btn-revolut-confirm-done">
-            <span>✓ Ho inviato il pagamento: Registra Ricarica</span>
-          </button>
-          <button type="button" class="btn-link text-muted mt-2" id="btn-revolut-cancel-step">
-            ← Annulla o scegli un altro pacchetto
-          </button>
         </div>
 
         <div id="payment-status-box" class="payment-status-box hidden"></div>

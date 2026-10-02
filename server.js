@@ -38,7 +38,6 @@ const USERS = {
 // Memory store per sessioni attive (sincronizzato con data/sessions.json)
 const activeSessions = compitiManager.loadSessions();
 const generatedProjects = new Map();
-const pendingRegistrations = new Map(); // email -> { email, password, username, otp, expiresAt, attempts }
 
 // Configurazione Multer per upload file (memoria)
 const upload = multer({
@@ -221,9 +220,9 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 /**
- * Richiesta di registrazione con invio codice OTP via Resend
+ * Registrazione diretta senza OTP (creazione account immediata con 1 credito omaggio)
  */
-app.post('/api/auth/register-request', async (req, res) => {
+async function handleDirectRegistration(req, res) {
   try {
     const { email, password, username } = req.body;
     if (!email || !password) {
@@ -244,114 +243,45 @@ app.post('/api/auth/register-request', async (req, res) => {
       return res.status(400).json({ error: 'La password deve contenere almeno 6 caratteri.' });
     }
 
-    // Verifica se l'email esiste già su Supabase
+    let user;
     if (supabaseModule.isConfigured()) {
+      // Verifica se l'email esiste già su Supabase
       const existing = await supabaseModule.findUserByEmail(cleanEmail);
       if (existing) {
         return res.status(400).json({ error: 'Un account con questa email esiste già. Effettua l\'accesso con la tua password.' });
       }
-    }
 
-    // Genera codice OTP numerico a 6 cifre
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Salva nei record pendenti (scadenza: 10 minuti)
-    pendingRegistrations.set(cleanEmail, {
-      email: cleanEmail,
-      password,
-      username: cleanUsername,
-      otp,
-      expiresAt: Date.now() + 10 * 60 * 1000,
-      createdAt: Date.now(),
-      attempts: 0
-    });
-
-    // Invia OTP via Mailgun
-    const sendResult = await mailgunModule.sendOtpEmail({
-      to: cleanEmail,
-      otp,
-      username: cleanUsername
-    });
-
-    return res.json({
-      success: true,
-      message: `Codice OTP di verifica inviato a ${cleanEmail}`,
-      email: cleanEmail,
-      simulated: sendResult.simulated,
-      note: sendResult.note,
-      testOtp: sendResult.simulated ? sendResult.otp : undefined
-    });
-  } catch (err) {
-    console.error('[Register Request Error]', err);
-    return res.status(500).json({ error: `Errore durante l'invio dell'OTP: ${err.message}` });
-  }
-});
-
-/**
- * Verifica del codice OTP e creazione account definitivo
- */
-app.post('/api/auth/verify-otp', async (req, res) => {
-  try {
-    const { email, otp } = req.body;
-    if (!email || !otp) {
-      return res.status(400).json({ error: 'Email e codice OTP sono obbligatori.' });
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanOtp = otp.trim();
-
-    const pending = pendingRegistrations.get(cleanEmail);
-    if (!pending) {
-      return res.status(400).json({ error: 'Nessuna registrazione in attesa o codice scaduto. Compila nuovamente la registrazione.' });
-    }
-
-    if (Date.now() > pending.expiresAt) {
-      pendingRegistrations.delete(cleanEmail);
-      return res.status(400).json({ error: 'Codice OTP scaduto. Richiedine uno nuovo.' });
-    }
-
-    if (pending.otp !== cleanOtp) {
-      pending.attempts = (pending.attempts || 0) + 1;
-      if (pending.attempts >= 5) {
-        pendingRegistrations.delete(cleanEmail);
-        return res.status(400).json({ error: 'Troppi tentativi errati. Richiedi un nuovo codice.' });
-      }
-      return res.status(400).json({ error: 'Codice OTP non valido. Controlla la tua email.' });
-    }
-
-    // OTP Verificato! Creazione utente su Supabase (1 credito omaggio)
-    let user;
-    if (supabaseModule.isConfigured()) {
       try {
         user = await supabaseModule.createNewUser({
-          email: pending.email,
-          password: pending.password,
-          username: pending.username,
+          email: cleanEmail,
+          password,
+          username: cleanUsername,
           credits: 1
         });
       } catch (sbErr) {
-        // Se l'utente esiste già, avvisa l'utente
         if (sbErr.message && sbErr.message.includes('already registered')) {
           return res.status(400).json({ error: 'Questo account è già stato registrato. Effettua il login.' });
         }
-        return res.status(500).json({ error: `Errore creazione utente Supabase: ${sbErr.message}` });
+        return res.status(500).json({ error: `Errore creazione utente: ${sbErr.message}` });
       }
     } else {
       user = {
         id: `local-${Date.now()}`,
-        email: pending.email,
-        username: pending.username,
+        email: cleanEmail,
+        username: cleanUsername,
         credits: 1
       };
+      USERS[cleanUsername.toLowerCase()] = password;
+      await supabaseModule.updateUserCredits(cleanUsername.toLowerCase(), 1);
     }
 
     // Crea sessione attiva
     const sessionToken = crypto.randomBytes(32).toString('hex');
-    const userIdentifier = pending.username || pending.email.split('@')[0];
+    const userIdentifier = user.username || cleanUsername || cleanEmail.split('@')[0];
 
     activeSessions.set(sessionToken, {
       username: userIdentifier,
-      email: pending.email,
+      email: cleanEmail,
       userId: user.id,
       isAdmin: false,
       loginTime: Date.now()
@@ -362,68 +292,34 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       signed: true,
       httpOnly: true,
       sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60 * 1000
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 giorni
     });
-
-    pendingRegistrations.delete(cleanEmail);
 
     return res.json({
       success: true,
       username: userIdentifier,
-      email: pending.email,
+      email: cleanEmail,
       credits: 1,
       isAdmin: false,
       sessionToken,
-      message: 'Registrazione verificata con successo! Benvenuto su CopiaPicchio! Hai ricevuto 1 credito.'
+      message: 'Registrazione completata con successo! Benvenuto su CopiaPicchio! Hai ricevuto 1 credito omaggio.'
     });
   } catch (err) {
-    console.error('[Verify OTP Error]', err);
-    return res.status(500).json({ error: `Errore verifica OTP: ${err.message}` });
+    console.error('[Register Error]', err);
+    return res.status(500).json({ error: `Errore durante la registrazione: ${err.message}` });
   }
+}
+
+app.post('/api/auth/register', handleDirectRegistration);
+app.post('/api/auth/register-request', handleDirectRegistration);
+
+// Endpoint di compatibilità per vecchie chiamate client
+app.post('/api/auth/verify-otp', (req, res) => {
+  return res.json({ success: true, message: 'Verifica OTP non più richiesta.' });
 });
 
-/**
- * Reinvia codice OTP
- */
-app.post('/api/auth/resend-otp', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Specifica l\'indirizzo email.' });
-
-    const cleanEmail = email.trim().toLowerCase();
-    const pending = pendingRegistrations.get(cleanEmail);
-    if (!pending) {
-      return res.status(400).json({ error: 'Nessuna registrazione in corso trovata per questa email.' });
-    }
-
-    // Cooldown minimo 20 secondi tra reinvii
-    if (Date.now() - pending.createdAt < 20000) {
-      const waitSec = Math.ceil((20000 - (Date.now() - pending.createdAt)) / 1000);
-      return res.status(429).json({ error: `Attendi ancora ${waitSec} secondi prima di richiedere un nuovo codice.` });
-    }
-
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    pending.otp = newOtp;
-    pending.expiresAt = Date.now() + 10 * 60 * 1000;
-    pending.createdAt = Date.now();
-    pending.attempts = 0;
-
-    const sendResult = await mailgunModule.sendOtpEmail({
-      to: cleanEmail,
-      otp: newOtp,
-      username: pending.username
-    });
-
-    return res.json({
-      success: true,
-      message: 'Un nuovo codice OTP è stato inviato!',
-      simulated: sendResult.simulated,
-      note: sendResult.note,
-      testOtp: sendResult.simulated ? sendResult.otp : undefined
-    });
-  } catch (err) {
-    return res.status(500).json({ error: `Errore reinvio OTP: ${err.message}` });
-  }
+app.post('/api/auth/resend-otp', (req, res) => {
+  return res.json({ success: true, message: 'Verifica OTP non più richiesta.' });
 });
 
 // ================= API PAGAMENTI AUTOMATICI (ALTERNATIVA A STRIPE) =================
