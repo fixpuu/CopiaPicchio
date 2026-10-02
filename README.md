@@ -4,7 +4,7 @@
 
 ---
 
-## 🌟 Caratteristiche Principali
+## 🌟 Caratteristiche Principalii
 
 - 📸 **Input Multimodale (Foto & Testo)**:
   - Incolla il testo della consegna o carica una foto (lavagna, quaderno, foglio stampato).
