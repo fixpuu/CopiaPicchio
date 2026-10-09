@@ -70,20 +70,65 @@ app.get('/', (req, res) => {
   return res.json({ name: 'CopiaPicchio API', status: 'running' });
 });
 
-// Middleware di autenticazione (supporta cookie o header x-session-token da localStorage con lookup multi-livello)
+// Creazione e verifica token firmati crittograficamente con COOKIE_SECRET (validità 30 giorni)
+function createSignedToken(payload) {
+  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', COOKIE_SECRET).update(data).digest('base64url');
+  return `${data}.${signature}`;
+}
+
+function verifySignedToken(token) {
+  if (!token || typeof token !== 'string' || !token.includes('.')) return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [data, signature] = parts;
+  try {
+    const expectedSig = crypto.createHmac('sha256', COOKIE_SECRET).update(data).digest('base64url');
+    if (signature.length === expectedSig.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
+      const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf-8'));
+      if (payload.exp && Date.now() > payload.exp) return null;
+      return payload;
+    }
+  } catch (_) {}
+  return null;
+}
+
+// Estrazione unificata del token da headers, bearer auth, query param, cookie o body
+function extractToken(req) {
+  let token = req.headers['x-session-token'] || req.query?.token || req.signedCookies?.cp_session || req.cookies?.cp_session || req.body?.session_token;
+  if (!token && req.headers?.authorization) {
+    const authHeader = req.headers.authorization;
+    if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+      token = authHeader.slice(7).trim();
+    }
+  }
+  return token;
+}
+
+// Middleware di autenticazione (supporta signed token crittografici, cookie, x-session-token, query e lookup multi-livello)
 async function requireAuth(req, res, next) {
-  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session || req.cookies?.cp_session;
+  const token = extractToken(req);
   if (token) {
+    // 1. Verifica token con firma crittografica interna (immediata, resiliente a cold-boot e riavvii)
+    const verified = verifySignedToken(token);
+    if (verified) {
+      req.user = verified;
+      req.sessionToken = token;
+      return next();
+    }
+
+    // 2. Lookup in archivio sessioni (RAM, file, Cloud Storage)
     let session = await compitiManager.findSession(token);
     if (!session && activeSessions.has(token)) {
       session = activeSessions.get(token);
     }
     if (!session) {
-      // Prova validazione diretta JWT Supabase
+      // 3. Prova validazione diretta JWT Supabase
       const sbUser = await supabaseModule.verifyToken(token);
       if (sbUser) {
         session = {
           username: (sbUser.username || '').toLowerCase().trim(),
+          originalUsername: sbUser.username,
           email: sbUser.email,
           userId: sbUser.userId,
           isAdmin: sbUser.isAdmin,
@@ -143,9 +188,12 @@ function sanitizeProjectOutput(projectData, autore = 'Nome e Cognome') {
 
 // Middleware di autorizzazione admin (accessibile solo ai 2 account: matty, zome)
 async function requireAdmin(req, res, next) {
-  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session || req.cookies?.cp_session;
+  const token = extractToken(req);
   if (token) {
-    let session = await compitiManager.findSession(token);
+    let session = verifySignedToken(token);
+    if (!session) {
+      session = await compitiManager.findSession(token);
+    }
     if (!session && activeSessions.has(token)) {
       session = activeSessions.get(token);
     }
@@ -154,6 +202,7 @@ async function requireAdmin(req, res, next) {
       if (sbUser) {
         session = {
           username: (sbUser.username || '').toLowerCase().trim(),
+          originalUsername: sbUser.username,
           email: sbUser.email,
           userId: sbUser.userId,
           isAdmin: sbUser.isAdmin,
@@ -190,8 +239,6 @@ app.post('/api/auth/login', async (req, res) => {
   if (supabaseModule.isConfigured()) {
     try {
       const { user, session, credits, isAdmin } = await supabaseModule.loginWithSupabase(cleanUser, password);
-      // Genera un token di sessione univoco e persistente (evita la scadenza a 1 ora del JWT Supabase)
-      const sessionToken = crypto.randomBytes(32).toString('hex');
       const userIdentifier = user.user_metadata?.username || user.email.split('@')[0];
 
       const sessionData = {
@@ -200,8 +247,12 @@ app.post('/api/auth/login', async (req, res) => {
         email: user.email,
         userId: user.id,
         isAdmin,
-        loginTime: Date.now()
+        loginTime: Date.now(),
+        exp: Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 giorni
       };
+
+      // Genera token firmato crittograficamente (resiliente e verificabile istantaneamente ovunque)
+      const sessionToken = createSignedToken(sessionData);
 
       activeSessions.set(sessionToken, sessionData);
       if (session?.access_token) {
@@ -235,15 +286,19 @@ app.post('/api/auth/login', async (req, res) => {
   const expectedPassword = USERS[userLower];
 
   if (expectedPassword && expectedPassword === password) {
-    const sessionToken = crypto.randomBytes(32).toString('hex');
     const isAdmin = supabaseModule.isUserAdmin({ username: userLower });
     const { credits } = await supabaseModule.getUserCredits({ username: userLower });
 
-    activeSessions.set(sessionToken, {
+    const sessionData = {
       username: userLower,
+      originalUsername: userLower,
       isAdmin,
-      loginTime: Date.now()
-    });
+      loginTime: Date.now(),
+      exp: Date.now() + 30 * 24 * 60 * 60 * 1000
+    };
+
+    const sessionToken = createSignedToken(sessionData);
+    activeSessions.set(sessionToken, sessionData);
     compitiManager.persistSessions(activeSessions);
 
     res.cookie('cp_session', sessionToken, {
@@ -322,17 +377,21 @@ async function handleDirectRegistration(req, res) {
       await supabaseModule.updateUserCredits(cleanUsername.toLowerCase(), 1);
     }
 
-    // Crea sessione attiva
-    const sessionToken = crypto.randomBytes(32).toString('hex');
+    // Crea sessione attiva firmata crittograficamente
     const userIdentifier = user.username || cleanUsername || cleanEmail.split('@')[0];
-
-    activeSessions.set(sessionToken, {
-      username: userIdentifier,
+    const sessionData = {
+      username: (userIdentifier || '').toLowerCase().trim(),
+      originalUsername: userIdentifier,
       email: cleanEmail,
       userId: user.id,
       isAdmin: false,
-      loginTime: Date.now()
-    });
+      loginTime: Date.now(),
+      exp: Date.now() + 30 * 24 * 60 * 60 * 1000
+    };
+
+    const sessionToken = createSignedToken(sessionData);
+
+    activeSessions.set(sessionToken, sessionData);
     compitiManager.persistSessions(activeSessions);
 
     res.cookie('cp_session', sessionToken, {
@@ -463,7 +522,7 @@ app.post('/api/payments/webhook/lemonsqueezy', async (req, res) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
-  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session || req.cookies?.cp_session;
+  const token = extractToken(req);
   if (token) {
     activeSessions.delete(token);
     compitiManager.persistSessions(activeSessions);
@@ -473,12 +532,20 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/auth/me', async (req, res) => {
-  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session || req.cookies?.cp_session;
+  const token = extractToken(req);
   if (token) {
-    let session = await compitiManager.findSession(token);
+    // 1. Verifica immediata con firma crittografica interna
+    let session = verifySignedToken(token);
+
+    // 2. Lookup da archivio sessioni / cloud storage
+    if (!session) {
+      session = await compitiManager.findSession(token);
+    }
     if (!session && activeSessions.has(token)) {
       session = activeSessions.get(token);
     }
+
+    // 3. Verifica JWT Supabase
     if (!session) {
       const sbUser = await supabaseModule.verifyToken(token);
       if (sbUser) {
@@ -494,6 +561,7 @@ app.get('/api/auth/me', async (req, res) => {
         compitiManager.persistSessions(activeSessions);
       }
     }
+
     if (session) {
       const { credits, isAdmin } = await supabaseModule.getUserCredits(session);
       return res.json({
@@ -541,7 +609,7 @@ app.get('/api/compiti/:id', requireAuth, async (req, res) => {
 });
 
 app.delete('/api/compiti/:id', requireAuth, async (req, res) => {
-  const ok = compitiManager.deleteCompito(req.params.id, req.user.username);
+  const ok = await compitiManager.deleteCompito(req.params.id, req.user.username);
   if (!ok && !req.user.isAdmin) {
     return res.status(404).json({ error: 'Compito non trovato o già eliminato.' });
   }
@@ -642,9 +710,9 @@ app.post('/api/admin/recharges/:id/reject', requireAdmin, async (req, res) => {
 
 // ================= API GENERAZIONE ESERCIZIO =================
 
-app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) => {
+app.post('/api/generate', upload.single('photo'), requireAuth, async (req, res) => {
   try {
-    const { consegna, autore, classe, data, nome_progetto, argomenti } = req.body;
+    const { consegna, autore, classe, data, nome_progetto, argomenti } = req.body || {};
     const photo = req.file;
 
     if (!consegna && !photo) {
@@ -737,10 +805,8 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
     };
 
     generatedProjects.set(projectId, finalData);
-    compitiManager.saveCompito(finalData);
-
-    // Salva asincrono su Supabase Cloud Storage
-    supabaseModule.saveCompitoSupabase(finalData).catch(() => {});
+    // Salva compito localmente e attendi la sincronizzazione completa su Supabase Cloud Storage
+    await compitiManager.saveCompito(finalData);
 
     // 5. Consuma 1 credito se utente non amministratore
     let remainingCredits = userCreditInfo.credits;

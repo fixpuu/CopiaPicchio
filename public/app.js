@@ -135,14 +135,21 @@ function apiFetch(url, options = {}) {
   options.headers = options.headers || {};
   options.credentials = 'include';
   const token = sessionToken || localStorage.getItem('cp_session_token');
+  let finalUrl = url;
   if (token) {
     if (options.headers instanceof Headers) {
       options.headers.set('x-session-token', token);
+      options.headers.set('Authorization', `Bearer ${token}`);
     } else {
       options.headers['x-session-token'] = token;
+      options.headers['Authorization'] = `Bearer ${token}`;
+    }
+    if (!finalUrl.includes('token=')) {
+      const sep = finalUrl.includes('?') ? '&' : '?';
+      finalUrl = `${finalUrl}${sep}token=${encodeURIComponent(token)}`;
     }
   }
-  return fetch(url, options).then(res => {
+  return fetch(finalUrl, options).then(res => {
     if (res.status === 401 && !url.includes('/api/auth/me')) {
       console.warn('[apiFetch] 401 Ricevuto da server per:', url);
       currentUser = null;
@@ -175,9 +182,14 @@ async function checkAuth() {
         }
       } catch (_) {}
     } else {
+      currentUser = null;
+      sessionToken = null;
+      localStorage.removeItem('cp_session_token');
       showAuthModal();
     }
   } catch (err) {
+    currentUser = null;
+    sessionToken = null;
     showAuthModal();
   }
 }
@@ -285,6 +297,7 @@ loginForm?.addEventListener('submit', async (e) => {
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
@@ -319,6 +332,7 @@ registerForm?.addEventListener('submit', async (e) => {
   try {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, username, password })
     });
@@ -841,8 +855,15 @@ exerciseForm?.addEventListener('submit', async (e) => {
     return;
   }
 
+  // Verifica se l'utente è autenticato su CopiaPicchio
+  if (!currentUser) {
+    showAuthModal();
+    showToast('Effettua prima il login su CopiaPicchio per generare un compito!', 'warning');
+    return;
+  }
+
   // Controllo crediti prima di avviare (se utente normale con 0 crediti)
-  if (!currentUser?.isAdmin && (currentUser?.credits <= 0)) {
+  if (!currentUser.isAdmin && (currentUser.credits <= 0)) {
     showCreditsModal();
     showToast('Hai 0 crediti disponibili. Ricarica per continuare.', 'error');
     return;
@@ -868,6 +889,9 @@ exerciseForm?.addEventListener('submit', async (e) => {
     formData.append('data', fieldData.value.trim() || formattedDate);
     if (fieldNomeProgetto.value.trim()) formData.append('nome_progetto', fieldNomeProgetto.value.trim());
     if (fieldArgomenti.value.trim()) formData.append('argomenti', fieldArgomenti.value.trim());
+
+    const curToken = sessionToken || localStorage.getItem('cp_session_token');
+    if (curToken) formData.append('session_token', curToken);
 
     const res = await apiFetch('/api/generate', {
       method: 'POST',

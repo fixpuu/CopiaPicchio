@@ -218,21 +218,30 @@ function getCompiti() {
 }
 
 async function getCompitiAsync() {
-  let list = getCompiti();
-  if (list.length === 0) {
-    try {
-      const cloudList = await supabaseModule.downloadStorageJson('compiti.json', []);
-      if (Array.isArray(cloudList) && cloudList.length > 0) {
-        memoryCompiti = cloudList;
-        writeJson(COMPITI_FILE, cloudList);
-        return cloudList;
+  try {
+    const cloudList = await supabaseModule.downloadStorageJson('compiti.json', null);
+    if (Array.isArray(cloudList) && cloudList.length > 0) {
+      const mergedMap = new Map();
+      for (const c of cloudList) {
+        if (c.id) mergedMap.set(c.id, c);
       }
-    } catch (_) {}
-  }
-  return list;
+      for (const c of memoryCompiti) {
+        if (c.id) mergedMap.set(c.id, c);
+      }
+      const diskList = readJson(COMPITI_FILE, []);
+      for (const c of diskList) {
+        if (c.id) mergedMap.set(c.id, c);
+      }
+      const merged = Array.from(mergedMap.values());
+      memoryCompiti = merged;
+      writeJson(COMPITI_FILE, merged);
+      return merged;
+    }
+  } catch (_) {}
+  return getCompiti();
 }
 
-function saveCompito(compito) {
+async function saveCompito(compito) {
   // Normalizzazione utente in minuscolo per ricerca affidabile
   if (compito.user) {
     compito.user = compito.user.toLowerCase().trim();
@@ -255,10 +264,12 @@ function saveCompito(compito) {
 
   writeJson(COMPITI_FILE, compiti);
 
-  // Sincronizzazione immediata e asincrona su Supabase Cloud Storage
-  supabaseModule.saveCompitoSupabase(compito).catch((e) => {
+  // Sincronizzazione immediata e attesa su Supabase Cloud Storage (essenziale su Lambda serverless per non bloccare l'upload prima del completamento)
+  try {
+    await supabaseModule.saveCompitoSupabase(compito);
+  } catch (e) {
     console.warn('[compitiManager] Errore sync cloud compito:', e.message);
-  });
+  }
 
   return compito;
 }
@@ -292,16 +303,16 @@ async function getCompitoById(id) {
     try {
       found = await supabaseModule.downloadStorageJson(`compiti/${id}.json`, null);
       if (found) {
-        saveCompito(found);
+        await saveCompito(found);
       }
     } catch (_) {}
   }
   return found;
 }
 
-function deleteCompito(id, username) {
+async function deleteCompito(id, username) {
   const clean = (username || '').toLowerCase().trim();
-  const compiti = getCompiti();
+  const compiti = await getCompitiAsync();
 
   const filtered = compiti.filter(c => {
     const cUser = (c.user || '').toLowerCase().trim();
@@ -314,7 +325,9 @@ function deleteCompito(id, username) {
   if (wasDeleted) {
     memoryCompiti = filtered;
     writeJson(COMPITI_FILE, filtered);
-    supabaseModule.uploadStorageJson('compiti.json', filtered).catch(() => {});
+    try {
+      await supabaseModule.uploadStorageJson('compiti.json', filtered);
+    } catch (_) {}
   }
   return wasDeleted;
 }

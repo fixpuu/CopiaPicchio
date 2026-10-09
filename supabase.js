@@ -408,7 +408,9 @@ async function ensureStorageBucket() {
   try {
     const { data: buckets } = await supabase.storage.listBuckets();
     if (!buckets?.some(b => b.name === STORAGE_BUCKET)) {
-      await supabase.storage.createBucket(STORAGE_BUCKET, { public: false });
+      await supabase.storage.createBucket(STORAGE_BUCKET, { public: true });
+    } else {
+      await supabase.storage.updateBucket(STORAGE_BUCKET, { public: true });
     }
     return true;
   } catch (err) {
