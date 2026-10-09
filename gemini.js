@@ -17,14 +17,14 @@ const MODELS = [
 ];
 
 /**
- * Call Gemini API with model fallback
+ * Call Gemini API with model fallback and customizable temperature
  */
-async function callGemini(contents, systemInstruction = '', responseSchema = null) {
+async function callGemini(contents, systemInstruction = '', responseSchema = null, temperature = 0.85) {
   let lastError = null;
 
   for (const model of MODELS) {
     try {
-      const result = await makeGeminiRequest(model, contents, systemInstruction, responseSchema);
+      const result = await makeGeminiRequest(model, contents, systemInstruction, responseSchema, temperature);
       if (result) return result;
     } catch (err) {
       console.warn(`[Gemini] Model ${model} failed: ${err.message}. Retrying with next model if available...`);
@@ -35,14 +35,14 @@ async function callGemini(contents, systemInstruction = '', responseSchema = nul
   throw new Error(`Tutti i modelli Gemini hanno fallito: ${lastError ? lastError.message : 'Errore sconosciuto'}`);
 }
 
-function makeGeminiRequest(model, contents, systemInstruction, responseSchema) {
+function makeGeminiRequest(model, contents, systemInstruction, responseSchema, temperature = 0.85) {
   return new Promise((resolve, reject) => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
     
     const body = {
       contents,
       generationConfig: {
-        temperature: 0.2,
+        temperature: typeof temperature === 'number' ? temperature : 0.85,
         topP: 0.95,
         maxOutputTokens: 8192,
         responseMimeType: 'application/json'
@@ -136,40 +136,35 @@ Il docente insegna esclusivamente il C++ scolastico di base. Qualsiasi costrutto
        ifstream f_check(nome_file_output);
        if (f_check.is_open()) { cerr << "Il file non deve esistere!" << endl; return 2; }
 
-4. ALGORITMI STANDARD DA UTILIZZARE (come nell'archivio dello studente):
-   - Generazione casuale:
-     int get_casuale(int da, int a) {
-         return rand() % (a - da + 1) + da;
-     }
-   - Scambio:
-     void scambia(int &a, int &b) {
-         int temp = a;
-         a = b;
-         b = temp;
-     }
-   - Ordinamento: Bubble Sort classico a due cicli for annidati:
-     void ordina_crescente(int v[], int n) {
-         for (int i = 0; i < n - 1; i++) {
-             for (int j = 0; j < n - 1 - i; j++) {
-                 if (v[j] > v[j + 1]) {
-                     scambia(v[j], v[j + 1]);
-                 }
-             }
-         }
-     }
-   - Calcolo media:
-     double calcola_media(int v[], int n) {
-         if (n <= 0) return 0.0;
-         double somma = 0.0;
-         for (int i = 0; i < n; i++) {
-             somma += (double)v[i];
-         }
-         double ans = somma / (double)n;
-         return ans;
-     }
-   - Calcolo minimo e massimo con for classico da 1 a n-1.
-   - Formattazione output a video con sezioni chiare:
-     cout << "===== Numeri =====" << endl;
+4. DIVERSIFICAZIONE OBBLIGATORIA DEL CODICE E ALGORITMI (UNICA PER OGNI STUDENTE):
+   ATTENZIONE ASSOLUTA: Ogni compito generato DEVE ESSERE COMPLETAMENTE DIVERSO da qualsiasi altro, anche a parità di consegna!
+   Due studenti della stessa classe che consegnano lo stesso esercizio NON devono MAI avere lo stesso identico codice, le stesse funzioni con gli stessi nomi o le stesse variabili, altrimenti il docente riconosce che è stato usato lo stesso software!
+
+   - NOMI VARIABILI E PARAMETRI (VARIATI COSTANTEMENTE):
+     * Array: arr, v, vet, numeri, lista, dati, valori, elementi, sequenza, tabella...
+     * Dimensione: n, dim, dimensione, tot, totale, lung, quantita, num_elem...
+     * Indici: i, j, k, idx, pos, p, ind, iter, passo, cursore...
+
+   - NOMI DELLE FUNZIONI (DESCRITTIVI IN ITALIANO MA UNICI PER OGNI COMPITO):
+     * Generazione casuale: genera_casuale, estrai_numero, random_tra, crea_casuale, rnd_int, estrai_valore, numero_casuale...
+     * Riempimento: riempi_vettore, popola_array, carica_numeri, inserisci_valori, genera_dati, popola_vettore, riempi_array...
+     * Stampa: stampa_vettore, visualizza_array, mostra_elementi, stampa_dati, output_vettore, stampa_numeri, visualizza_dati, mostra_valori...
+     * Ordinamento: ordina_vettore, bubble_sort, ordina_crescente, ordina_elementi, f_ordina_dati, ordina_array, bubble_sort_crescente, ordina_numeri...
+     * Scambio: scambia, scambia_elementi, inverti_valori, OPPURE scambio inline con variabile temporanea senza funzione separata!
+     * Calcolo min/max: trova_minimo / trova_massimo, calcola_min / calcola_max, cerca_minimo / cerca_massimo, min_valore / max_valore...
+     * Calcolo media: calcola_media, media_elementi, media_vettore, calcolo_valore_medio, determina_media, media_numeri...
+     * File I/O: salva_su_file, scrivi_file, esporta_dati, salva_vettore, scrivi_elenco_file, esporta_numeri...
+
+   - STRUTTURA DEL CODICE E ALGORITMI (SEMPRE NEL C++ SCOLASTICO DI BASE DELLA MAPPA):
+     * Varia l'approccio del Bubble Sort:
+       - Doppio for classico: i da 0 a n-1, j da 0 a n-1-i.
+       - Oppure con flag booleano di controllo (es. bool scambiato = false; ...).
+       - Oppure ciclo decrementale: i da n-1 a 0, j da 0 a i.
+       - Scambio: tramite funzione scambia con riferimenti (int &a, int &b) o inline (int temp = ...).
+     * Calcolo media: sempre cast a double espliciti, es. double ris = (double)somma / (double)n;
+     * Varia le frasi di prompt e messaggi cout nel main.cpp: ogni studente formula i messaggi con parole proprie.
+     * Varia lo stile dei commenti: commenti sintetici o esplicativi dello studente, mai frasi fisse predefinite.
+     * Varia le spiegazioni della relazione README e dei passaggi: devono sembrare scritte a mano da uno studente diverso.
 
 5. STRUTTURA DEL PROGETTO C++ A 3 FILE:
    - function.h: include guards '#ifndef FUNCTION_H', '#define FUNCTION_H " funzione"', prototipi.
@@ -294,6 +289,70 @@ function formatComprehensiveReadme({ project, autore, classe, data, testResult }
 }
 
 /**
+ * Crea un profilo di diversificazione randomizzato per garantire che ogni compito,
+ * anche con consegna identica, abbia codice unico e non fotocopia
+ */
+function createUniqueDiversityProfile() {
+  const seed = Math.floor(100000 + Math.random() * 900000);
+
+  const arrayNames = ['v', 'arr', 'vet', 'numeri', 'valori', 'elementi', 'dati', 'sequenza', 'lista_valori'];
+  const sizeNames = ['n', 'dim', 'dimensione', 'tot', 'totale', 'lunghezza', 'quanti', 'num_elementi'];
+  const indexPairs = [
+    { i: 'i', j: 'j' },
+    { i: 'idx', j: 'jdx' },
+    { i: 'pos', j: 'p' },
+    { i: 'iter', j: 'passo' },
+    { i: 'ind', j: 'j' }
+  ];
+
+  const sortApproaches = [
+    'Bubble Sort standard con due cicli for annidati crescenti',
+    'Bubble Sort con flag booleano di verifica scambio (es. bool scambiato = false; if (!scambiato) break;)',
+    'Bubble Sort con ciclo esterno decrementale (for int i = dim - 1; i > 0; i--)',
+    'Bubble Sort classico a bolle con scansione elementi'
+  ];
+
+  const swapApproaches = [
+    'Funzione ausiliaria scambia con passaggio per riferimento (int &a, int &b)',
+    'Scambio inline direttamente nel blocco del ciclo con variabile di supporto (int temp = ...)',
+    'Funzione ausiliaria scambia_valori con variabili temporanee'
+  ];
+
+  const commentStyles = [
+    'Commenti sintetici in stile studente (es. // inizializzazione array, // ordinamento a bolle)',
+    'Commenti chiari sui punti salienti dell\'algoritmo e sulla gestione del cast time/srand',
+    'Codice pulito con commenti essenziali sulle sole funzioni e prototipi',
+    'Commenti esplicativi riga per riga su passaggi logici e controlli if'
+  ];
+
+  const promptPhrasings = [
+    { input: 'Inserisci quantita elementi: ', output: '===== Dati Ordinati =====' },
+    { input: 'Quanti numeri generare? ', output: '[Elementi del Vettore]' },
+    { input: 'Numero di valori: ', output: '--- Risultato Finale ---' },
+    { input: 'Dimensione del vettore: ', output: 'Elenco valori elaborati:' }
+  ];
+
+  const randArr = arrayNames[Math.floor(Math.random() * arrayNames.length)];
+  const randSize = sizeNames[Math.floor(Math.random() * sizeNames.length)];
+  const randIdx = indexPairs[Math.floor(Math.random() * indexPairs.length)];
+  const randSort = sortApproaches[Math.floor(Math.random() * sortApproaches.length)];
+  const randSwap = swapApproaches[Math.floor(Math.random() * swapApproaches.length)];
+  const randComment = commentStyles[Math.floor(Math.random() * commentStyles.length)];
+  const randPrompt = promptPhrasings[Math.floor(Math.random() * promptPhrasings.length)];
+
+  return {
+    seed,
+    arrayName: randArr,
+    sizeName: randSize,
+    indices: randIdx,
+    sortApproach: randSort,
+    swapApproach: randSwap,
+    commentStyle: randComment,
+    promptPhrasing: randPrompt
+  };
+}
+
+/**
  * Generate full exercise project from prompt / image
  */
 async function generateExercise({ consegna, imageBuffer, imageMime, autore, classe, data, nomeProgetto, argomenti }) {
@@ -311,19 +370,47 @@ async function generateExercise({ consegna, imageBuffer, imageMime, autore, clas
     });
   }
 
+  const diversity = createUniqueDiversityProfile();
+
+  const uniquenessDirectives = `
+======================================================================
+DIRETTIVA TASSATIVA DI UNICITA E VARIETA (ID Univoco #${diversity.seed}):
+DUE STUDENTI CON LA STESSA CONSEGNA NON DEVONO MAI AVERE LO STESSO CODICE!
+NON USARE NOMI DI FUNZIONI O VARIABILI PREVEDIBILI O IDENTICI AD ALTRI COMPITI.
+======================================================================
+Per questa specifica generazione dell'esercizio adotta questa impronta stilistica unica:
+- Nome identificatore array primario: usa preferibilmente '${diversity.arrayName}' (evita di usare sempre 'v')
+- Nome identificatore dimensione: usa preferibilmente '${diversity.sizeName}' (evita di usare sempre 'n')
+- Indici dei cicli: usa '${diversity.indices.i}', '${diversity.indices.j}'
+- Approccio per l'ordinamento (se richiesto): ${diversity.sortApproach}
+- Tecnica di scambio (se necessaria): ${diversity.swapApproach}
+- Nomi delle funzioni in function.h e function.cpp: inventa nomi chiari, rigorosi in italiano ma VARIATI rispetto ad altri compiti (es. varia tra 'genera_casuale', 'estrai_numeri', 'crea_vettore', 'popola_array', 'visualizza_dati', 'stampa_vettore', 'ordina_dati', 'bubble_sort', 'cerca_minimo', 'trova_minimo', ecc.).
+- Stile dei messaggi cout a video: usa formulazioni realistiche come "${diversity.promptPhrasing.input}" e "${diversity.promptPhrasing.output}".
+- Stile commenti nel codice: ${diversity.commentStyle}.
+- Spiegazioni della relazione README e dei "passaggi": formula le descrizioni con parole e considerazioni originali per questo studente, evitando frasi stereotipate o fotocopia.
+
+ATTENZIONE: TUTTI i requisiti didattici della MAPPA DIDATTICA rimangono rigorosamente validi:
+- SOLO C++ scolastico di base: array statici C (int ${diversity.arrayName}[]), struct C-style.
+- MAI <vector>, MAI <algorithm>, MAI auto, MAI template, MAI lambda.
+- Zero errori e zero warning con g++ -Wall -Wconversion (cast obbligatorio srand((unsigned int)time(NULL));, cast espliciti nelle divisioni double).
+- Nessun riferimento a Diemoz o Daniel Diemoz o percorsi personali.
+`;
+
   const promptText = `
 Dati per l'esercizio:
 - Autore: ${autore || 'Nome e Cognome'}
 - Classe: ${classe || '3B IT'}
 - Data: ${data || new Date().toLocaleDateString('it-IT')}
-- Nome Progetto preferito: ${nomeProgetto || 'auto-genera in snake_case (es. ripasso_vettori, divisori, estrazioni)'}
+- Nome Progetto preferito: ${nomeProgetto || `auto-genera in snake_case (es. ripasso_vettori_${diversity.seed % 100}, gestione_array, elaborazione_dati)`}
 - Argomenti indicati (se forniti): ${argomenti || 'Dedurli accuratamente dalla consegna'}
 - Testo consegna aggiuntivo o fornito:
 ${consegna || '(Vedi immagine allegata per la consegna)'}
 
+${uniquenessDirectives}
+
 Genera il progetto software C++ completo.
 RICORDA TASSATIVAMENTE:
-1. SOLO C++ SCOLASTICO DI BASE DALLA MAPPA (array C int v[], niente <vector>, niente <algorithm>, niente lambda, niente auto).
+1. SOLO C++ SCOLASTICO DI BASE DALLA MAPPA (array C int ${diversity.arrayName}[], niente <vector>, niente <algorithm>, niente lambda, niente auto).
 2. Scomponi la consegna nei singoli passaggi nell'array "passaggi", fornendo per CIASCUNO titolo, spiegazione, prototipo, spiegazione del prototipo, implementazione, spiegazione implementazione, utilizzo nel main e test output!
 
 Restituisci un JSON valido con questa struttura esatta:
@@ -343,12 +430,12 @@ Restituisci un JSON valido con questa struttura esatta:
     {
       "titolo": "Titolo del requisito (es. Generare n numeri casuali tra -1000 e 1000)",
       "spiegazione": "Descrizione approfondita del requisito e della logica",
-      "prototipo": "int get_casuale(int da, int a);",
+      "prototipo": "string (prototipo in function.h)",
       "prototipo_spiegazione": "Prototipo dichiarato in function.h, riceve estremi e restituisce intero casuale.",
-      "implementazione": "int get_casuale(int da, int a) { return rand() % (a - da + 1) + da; }",
-      "implementazione_spiegazione": "Usa la formula classica per generare numeri pseudo-casuali compresi tra estremi inclusi.",
-      "utilizzo_main": "for(int i=0; i<n; i++) v[i] = get_casuale(-1000, 1000);",
-      "test_output": "Numero casuale: 452\\nNumero casuale: -312"
+      "implementazione": "string (codice implementazione in function.cpp)",
+      "implementazione_spiegazione": "Spiegazione della logica didattica della funzione.",
+      "utilizzo_main": "string (chiamata nel main.cpp)",
+      "test_output": "string (output realistico a video)"
     }
   ],
   "input_files": [
@@ -359,7 +446,7 @@ Restituisci un JSON valido con questa struttura esatta:
 
   parts.push({ text: promptText });
 
-  const result = await callGemini([{ parts }], SYSTEM_PROMPT);
+  const result = await callGemini([{ parts }], SYSTEM_PROMPT, null, 0.85);
 
   // Costruisci la relazione completa, ricca e dettagliata
   result.readme_md = formatComprehensiveReadme({
@@ -401,7 +488,7 @@ Correggi il codice e fornisci la versione corretta nel seguente JSON:
 }
 `;
 
-  const fixResult = await callGemini([{ parts: [{ text: prompt }] }], SYSTEM_PROMPT);
+  const fixResult = await callGemini([{ parts: [{ text: prompt }] }], SYSTEM_PROMPT, null, 0.2);
   return fixResult;
 }
 

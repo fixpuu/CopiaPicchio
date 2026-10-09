@@ -398,55 +398,145 @@ async function deleteUser(userId) {
   return { success: true };
 }
 
+const STORAGE_BUCKET = 'copiapicchio_data';
+
 /**
- * Salva un compito su Supabase se configurato
+ * Assicura che il bucket di archiviazione esista su Supabase
  */
-async function saveCompitoSupabase(compito) {
+async function ensureStorageBucket() {
+  if (!supabase) return false;
+  try {
+    const { data: buckets } = await supabase.storage.listBuckets();
+    if (!buckets?.some(b => b.name === STORAGE_BUCKET)) {
+      await supabase.storage.createBucket(STORAGE_BUCKET, { public: false });
+    }
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
+ * Carica un file JSON nel cloud storage di Supabase
+ */
+async function uploadStorageJson(filename, obj) {
   if (!supabase) return null;
   try {
-    const record = {
-      id: compito.id,
-      user_email: compito.user,
-      created_at: compito.createdAt,
-      formatted_date: compito.formattedDate,
-      nome_progetto: compito.nome_progetto,
-      titolo: compito.titolo,
-      consegna: compito.consegna,
-      project: compito.project,
-      test_result: compito.testResult
-    };
-
-    const { data, error } = await supabase
-      .from('compiti')
-      .upsert(record, { onConflict: 'id' });
-
+    await ensureStorageBucket();
+    const content = JSON.stringify(obj, null, 2);
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(filename, content, {
+        contentType: 'application/json',
+        upsert: true
+      });
     if (error) {
-      console.warn('[Supabase DB] Avviso salvataggio tabella compiti:', error.message);
+      console.warn(`[Supabase Storage] Avviso upload ${filename}:`, error.message);
+      return null;
     }
     return data;
   } catch (err) {
-    console.warn('[Supabase DB] Errore DB:', err.message);
+    console.warn(`[Supabase Storage] Errore upload ${filename}:`, err.message);
     return null;
   }
 }
 
 /**
- * Recupera compiti per utente da Supabase
+ * Scarica un file JSON dal cloud storage di Supabase
  */
-async function getCompitiSupabase(userEmail) {
+async function downloadStorageJson(filename, defaultVal = null) {
+  if (!supabase) return defaultVal;
+  try {
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .download(filename);
+    if (error || !data) return defaultVal;
+    const text = await data.text();
+    return JSON.parse(text);
+  } catch (err) {
+    return defaultVal;
+  }
+}
+
+/**
+ * Verifica se un token fornito è un JWT valido di Supabase
+ */
+async function verifyToken(token) {
+  if (!supabase || !token || typeof token !== 'string') return null;
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (!error && data?.user) {
+      const user = data.user;
+      const isAdmin = isUserAdmin(user);
+      const userIdentifier = user.user_metadata?.username || user.email.split('@')[0];
+      return {
+        username: userIdentifier,
+        email: user.email,
+        userId: user.id,
+        isAdmin
+      };
+    }
+  } catch (_) {}
+  return null;
+}
+
+/**
+ * Salva un compito su Supabase Storage (e DB come fallback)
+ */
+async function saveCompitoSupabase(compito) {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase
-      .from('compiti')
-      .select('*')
-      .or(`user_email.eq.${userEmail},user_email.eq.${userEmail}@scuola.it`)
-      .order('created_at', { ascending: false });
+    // 1. Salva singolo compito in compiti/<id>.json
+    await uploadStorageJson(`compiti/${compito.id}.json`, compito);
 
-    if (error) {
-      console.warn('[Supabase DB] Avviso lettura compiti:', error.message);
-      return null;
+    // 2. Sincronizza lista completa compiti.json su cloud storage
+    const cloudCompiti = await downloadStorageJson('compiti.json', []);
+    const idx = cloudCompiti.findIndex(c => c.id === compito.id);
+    if (idx >= 0) {
+      cloudCompiti[idx] = compito;
+    } else {
+      cloudCompiti.unshift(compito);
     }
-    return data;
+    await uploadStorageJson('compiti.json', cloudCompiti);
+
+    // 3. Prova anche tabella SQL se configurata (opzionale)
+    try {
+      const record = {
+        id: compito.id,
+        user_email: compito.user,
+        created_at: compito.createdAt,
+        formatted_date: compito.formattedDate,
+        nome_progetto: compito.nome_progetto,
+        titolo: compito.titolo,
+        consegna: compito.consegna,
+        project: compito.project,
+        test_result: compito.testResult
+      };
+      await supabase.from('compiti').upsert(record, { onConflict: 'id' });
+    } catch (_) {}
+
+    return true;
+  } catch (err) {
+    console.warn('[Supabase Compito Save] Errore:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Recupera compiti per utente da Supabase Storage
+ */
+async function getCompitiSupabase(userEmailOrUsername) {
+  if (!supabase) return null;
+  try {
+    const cloudCompiti = await downloadStorageJson('compiti.json', null);
+    if (!cloudCompiti || !Array.isArray(cloudCompiti)) return null;
+
+    const target = (userEmailOrUsername || '').toLowerCase().trim();
+    return cloudCompiti.filter(c => {
+      const cUser = (c.user || '').toLowerCase().trim();
+      const cEmail = (c.user_email || '').toLowerCase().trim();
+      return cUser === target || cEmail === target || cEmail.startsWith(`${target}@`);
+    });
   } catch (err) {
     return null;
   }
@@ -465,6 +555,10 @@ module.exports = {
   createNewUser,
   findUserByEmail,
   deleteUser,
+  ensureStorageBucket,
+  uploadStorageJson,
+  downloadStorageJson,
+  verifyToken,
   saveCompitoSupabase,
   getCompitiSupabase
 };

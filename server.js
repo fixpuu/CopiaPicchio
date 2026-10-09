@@ -70,13 +70,34 @@ app.get('/', (req, res) => {
   return res.json({ name: 'CopiaPicchio API', status: 'running' });
 });
 
-// Middleware di autenticazione (supporta cookie o header x-session-token da localStorage)
-function requireAuth(req, res, next) {
-  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session;
-  if (token && activeSessions.has(token)) {
-    req.user = activeSessions.get(token);
-    req.sessionToken = token;
-    return next();
+// Middleware di autenticazione (supporta cookie o header x-session-token da localStorage con lookup multi-livello)
+async function requireAuth(req, res, next) {
+  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session || req.cookies?.cp_session;
+  if (token) {
+    let session = await compitiManager.findSession(token);
+    if (!session && activeSessions.has(token)) {
+      session = activeSessions.get(token);
+    }
+    if (!session) {
+      // Prova validazione diretta JWT Supabase
+      const sbUser = await supabaseModule.verifyToken(token);
+      if (sbUser) {
+        session = {
+          username: (sbUser.username || '').toLowerCase().trim(),
+          email: sbUser.email,
+          userId: sbUser.userId,
+          isAdmin: sbUser.isAdmin,
+          loginTime: Date.now()
+        };
+        activeSessions.set(token, session);
+        compitiManager.persistSessions(activeSessions);
+      }
+    }
+    if (session) {
+      req.user = session;
+      req.sessionToken = token;
+      return next();
+    }
   }
   return res.status(401).json({ error: 'Non autorizzato. Effettua il login su CopiaPicchio!' });
 }
@@ -121,16 +142,35 @@ function sanitizeProjectOutput(projectData, autore = 'Nome e Cognome') {
 }
 
 // Middleware di autorizzazione admin (accessibile solo ai 2 account: matty, zome)
-function requireAdmin(req, res, next) {
-  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session;
-  if (token && activeSessions.has(token)) {
-    const session = activeSessions.get(token);
-    if (supabaseModule.isUserAdmin(session)) {
-      req.user = session;
-      req.sessionToken = token;
-      return next();
+async function requireAdmin(req, res, next) {
+  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session || req.cookies?.cp_session;
+  if (token) {
+    let session = await compitiManager.findSession(token);
+    if (!session && activeSessions.has(token)) {
+      session = activeSessions.get(token);
     }
-    return res.status(403).json({ error: 'Accesso negato. Solo gli account amministratori autorizzati (matty, zome) possono accedere a questa sezione.' });
+    if (!session) {
+      const sbUser = await supabaseModule.verifyToken(token);
+      if (sbUser) {
+        session = {
+          username: (sbUser.username || '').toLowerCase().trim(),
+          email: sbUser.email,
+          userId: sbUser.userId,
+          isAdmin: sbUser.isAdmin,
+          loginTime: Date.now()
+        };
+        activeSessions.set(token, session);
+        compitiManager.persistSessions(activeSessions);
+      }
+    }
+    if (session) {
+      if (supabaseModule.isUserAdmin(session)) {
+        req.user = session;
+        req.sessionToken = token;
+        return next();
+      }
+      return res.status(403).json({ error: 'Accesso negato. Solo gli account amministratori autorizzati (matty, zome) possono accedere a questa sezione.' });
+    }
   }
   return res.status(401).json({ error: 'Non autorizzato. Effettua il login come amministratore.' });
 }
@@ -150,16 +190,23 @@ app.post('/api/auth/login', async (req, res) => {
   if (supabaseModule.isConfigured()) {
     try {
       const { user, session, credits, isAdmin } = await supabaseModule.loginWithSupabase(cleanUser, password);
-      const sessionToken = session?.access_token || crypto.randomBytes(32).toString('hex');
+      // Genera un token di sessione univoco e persistente (evita la scadenza a 1 ora del JWT Supabase)
+      const sessionToken = crypto.randomBytes(32).toString('hex');
       const userIdentifier = user.user_metadata?.username || user.email.split('@')[0];
 
-      activeSessions.set(sessionToken, {
-        username: userIdentifier,
+      const sessionData = {
+        username: (userIdentifier || '').toLowerCase().trim(),
+        originalUsername: userIdentifier,
         email: user.email,
         userId: user.id,
         isAdmin,
         loginTime: Date.now()
-      });
+      };
+
+      activeSessions.set(sessionToken, sessionData);
+      if (session?.access_token) {
+        activeSessions.set(session.access_token, sessionData);
+      }
       compitiManager.persistSessions(activeSessions);
 
       res.cookie('cp_session', sessionToken, {
@@ -416,7 +463,7 @@ app.post('/api/payments/webhook/lemonsqueezy', async (req, res) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
-  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session;
+  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session || req.cookies?.cp_session;
   if (token) {
     activeSessions.delete(token);
     compitiManager.persistSessions(activeSessions);
@@ -426,18 +473,38 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/auth/me', async (req, res) => {
-  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session;
-  if (token && activeSessions.has(token)) {
-    const session = activeSessions.get(token);
-    const { credits, isAdmin } = await supabaseModule.getUserCredits(session);
-    return res.json({
-      authenticated: true,
-      username: session.username,
-      email: session.email,
-      credits,
-      isAdmin,
-      sessionToken: token
-    });
+  const token = req.headers['x-session-token'] || req.signedCookies?.cp_session || req.cookies?.cp_session;
+  if (token) {
+    let session = await compitiManager.findSession(token);
+    if (!session && activeSessions.has(token)) {
+      session = activeSessions.get(token);
+    }
+    if (!session) {
+      const sbUser = await supabaseModule.verifyToken(token);
+      if (sbUser) {
+        session = {
+          username: (sbUser.username || '').toLowerCase().trim(),
+          originalUsername: sbUser.username,
+          email: sbUser.email,
+          userId: sbUser.userId,
+          isAdmin: sbUser.isAdmin,
+          loginTime: Date.now()
+        };
+        activeSessions.set(token, session);
+        compitiManager.persistSessions(activeSessions);
+      }
+    }
+    if (session) {
+      const { credits, isAdmin } = await supabaseModule.getUserCredits(session);
+      return res.json({
+        authenticated: true,
+        username: session.originalUsername || session.username,
+        email: session.email,
+        credits,
+        isAdmin: !!(isAdmin || session.isAdmin),
+        sessionToken: token
+      });
+    }
   }
   return res.json({ authenticated: false });
 });
@@ -451,38 +518,31 @@ app.get('/api/user/credits', requireAuth, async (req, res) => {
 // ================= API I MIEI COMPITI =================
 
 app.get('/api/compiti', requireAuth, async (req, res) => {
-  // Prova da Supabase se configurato
-  const cloudList = await supabaseModule.getCompitiSupabase(req.user.username);
-  if (cloudList && cloudList.length > 0) {
-    const formatted = cloudList.map(c => ({
-      id: c.id,
-      user: c.user_email?.split('@')[0] || req.user.username,
-      createdAt: c.created_at,
-      formattedDate: c.formatted_date,
-      nome_progetto: c.nome_progetto,
-      titolo: c.titolo,
-      consegna_preview: (c.consegna || '').slice(0, 120) + '...',
-      testSuccess: c.test_result?.success ?? true
-    }));
-    return res.json({ success: true, compiti: formatted });
-  }
-
-  // Altrimenti archivio locale / persistente
-  const list = compitiManager.getCompitiByUser(req.user.username);
+  const username = req.user.username;
+  const list = await compitiManager.getCompitiByUser(username);
   res.json({ success: true, compiti: list });
 });
 
-app.get('/api/compiti/:id', requireAuth, (req, res) => {
-  const compito = compitiManager.getCompitoById(req.params.id);
-  if (!compito || compito.user !== req.user.username) {
+app.get('/api/compiti/:id', requireAuth, async (req, res) => {
+  const compito = await compitiManager.getCompitoById(req.params.id);
+  if (!compito) {
     return res.status(404).json({ error: 'Compito non trovato.' });
+  }
+
+  const reqUser = (req.user.username || '').toLowerCase().trim();
+  const reqEmail = (req.user.email || '').toLowerCase().trim();
+  const cUser = (compito.user || '').toLowerCase().trim();
+  const cEmail = (compito.user_email || '').toLowerCase().trim();
+
+  if (!req.user.isAdmin && cUser !== reqUser && cEmail !== reqEmail && !cEmail.startsWith(`${reqUser}@`)) {
+    return res.status(403).json({ error: 'Compito non trovato o accesso non autorizzato.' });
   }
   res.json({ success: true, compito });
 });
 
-app.delete('/api/compiti/:id', requireAuth, (req, res) => {
+app.delete('/api/compiti/:id', requireAuth, async (req, res) => {
   const ok = compitiManager.deleteCompito(req.params.id, req.user.username);
-  if (!ok) {
+  if (!ok && !req.user.isAdmin) {
     return res.status(404).json({ error: 'Compito non trovato o già eliminato.' });
   }
   res.json({ success: true });
@@ -659,13 +719,15 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
     });
     project = sanitizeProjectOutput(project, autore || 'Nome e Cognome');
 
-    // 4. Salva progetto in memoria, su file e su Supabase
+    // 4. Salva progetto in memoria, su file e su Supabase Cloud Storage
     const projectId = crypto.randomUUID();
     const finalData = {
       id: projectId,
       createdAt: new Date().toISOString(),
       formattedDate: data || new Date().toLocaleDateString('it-IT'),
-      user: req.user.username,
+      user: (req.user.username || '').toLowerCase().trim(),
+      user_email: (req.user.email || '').toLowerCase().trim(),
+      userId: req.user.userId || req.user.id || '',
       nome_progetto: project.nome_progetto,
       titolo: project.titolo || `Esercizi di informatica del ${data || new Date().toLocaleDateString('it-IT')}`,
       consegna: consegna || project.consegna_trascritta || '',
@@ -677,7 +739,7 @@ app.post('/api/generate', requireAuth, upload.single('photo'), async (req, res) 
     generatedProjects.set(projectId, finalData);
     compitiManager.saveCompito(finalData);
 
-    // Salva asincrono su Supabase
+    // Salva asincrono su Supabase Cloud Storage
     supabaseModule.saveCompitoSupabase(finalData).catch(() => {});
 
     // 5. Consuma 1 credito se utente non amministratore
@@ -708,7 +770,7 @@ app.get('/api/download-zip/:id', requireAuth, async (req, res) => {
   
   let projectEntry = generatedProjects.get(id);
   if (!projectEntry) {
-    projectEntry = compitiManager.getCompitoById(id);
+    projectEntry = await compitiManager.getCompitoById(id);
   }
 
   if (!projectEntry) {

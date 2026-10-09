@@ -133,14 +133,26 @@ if (fieldData) fieldData.value = formattedDate;
 
 function apiFetch(url, options = {}) {
   options.headers = options.headers || {};
-  if (sessionToken) {
+  options.credentials = 'include';
+  const token = sessionToken || localStorage.getItem('cp_session_token');
+  if (token) {
     if (options.headers instanceof Headers) {
-      options.headers.set('x-session-token', sessionToken);
+      options.headers.set('x-session-token', token);
     } else {
-      options.headers['x-session-token'] = sessionToken;
+      options.headers['x-session-token'] = token;
     }
   }
-  return fetch(url, options);
+  return fetch(url, options).then(res => {
+    if (res.status === 401 && !url.includes('/api/auth/me')) {
+      console.warn('[apiFetch] 401 Ricevuto da server per:', url);
+      currentUser = null;
+      sessionToken = null;
+      localStorage.removeItem('cp_session_token');
+      showAuthModal();
+      showToast('Sessione scaduta o non valida. Effettua nuovamente il login.', 'error');
+    }
+    return res;
+  });
 }
 
 // ================= AUTHENTICATION & CREDITS =================
@@ -151,6 +163,17 @@ async function checkAuth() {
     const data = await res.json();
     if (data.authenticated) {
       setAuthenticatedUser(data, data.sessionToken || sessionToken);
+      // Ripristina l'ultimo compito generato/visualizzato se presente in cache locale
+      try {
+        const lastView = localStorage.getItem('cp_last_project_view');
+        if (lastView) {
+          const parsed = JSON.parse(lastView);
+          if (parsed && parsed.project) {
+            renderResults(parsed);
+            resultsSection?.classList.remove('hidden');
+          }
+        }
+      } catch (_) {}
     } else {
       showAuthModal();
     }
@@ -574,7 +597,9 @@ function showNuovoCompitoView() {
   navBtnAdmin?.classList.remove('active');
   compitiSection?.classList.add('hidden');
   adminSection?.classList.add('hidden');
+  resultsSection?.classList.add('hidden');
   inputSection?.classList.remove('hidden');
+  inputSection?.scrollIntoView({ behavior: 'smooth' });
 }
 
 function showCompitiView() {
@@ -694,6 +719,13 @@ window.deleteCompito = async function(id) {
     const res = await apiFetch(`/api/compiti/${id}`, { method: 'DELETE' });
     const data = await res.json();
     if (res.ok && data.success) {
+      try {
+        const lastView = localStorage.getItem('cp_last_project_view');
+        if (lastView && JSON.parse(lastView).projectId === id) {
+          localStorage.removeItem('cp_last_project_view');
+          resultsSection?.classList.add('hidden');
+        }
+      } catch (_) {}
       showToast('Compito eliminato', 'success');
       loadCompiti();
     } else {
@@ -918,6 +950,14 @@ function renderResults(data) {
   const { projectId, project, testResult } = data;
   currentProject = project;
   currentProjectId = projectId;
+
+  try {
+    localStorage.setItem('cp_last_project_view', JSON.stringify({
+      projectId,
+      project,
+      testResult
+    }));
+  } catch (_) {}
 
   resProjectTitle.textContent = project.titolo || 'Esercizio Risolto';
   resFolderName.textContent = project.nome_progetto || 'progetto';
