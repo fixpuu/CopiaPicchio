@@ -330,9 +330,52 @@
           <!-- Text area consegna -->
           <div class="text-zone-wrapper">
             <label for="text-consegna" class="field-label">Testo della consegna (opzionale se hai allegato la foto)</label>
-            <textarea id="text-consegna" rows="8" placeholder="Es. Creare un programma che genera n numeri casuali tra -1000 e +1000, li inserisce in un vettore e li salva in un file. Realizzare le funzioni: calcolo media, minimo, massimo, ordinamento crescente..."></textarea>
+            <textarea id="text-consegna" rows="8" placeholder="Es. Creare un programma che gestisce una classe animale con nome, razza, anno di nascita e genere... Oppure incolla una consegna da fare su singolo file o a progetto completo."></textarea>
           </div>
 
+        </div>
+
+        <!-- Selettore Struttura: Automatico / Progetto Informatico / Singolo File -->
+        <div class="structure-mode-card">
+          <label class="field-label">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span>Struttura del Compito / Progetto</span>
+          </label>
+          <div class="structure-options-grid" id="structure-options-grid">
+            <label class="structure-option active" data-mode="auto">
+              <input type="radio" name="structure_mode" value="auto" checked>
+              <div class="structure-option-box">
+                <div class="opt-header">
+                  <span class="opt-icon">🧠</span>
+                  <span class="opt-title">Rilevamento Intelligente</span>
+                  <span class="opt-badge">Consigliato</span>
+                </div>
+                <p class="opt-desc">L'IA capisce dalla consegna se fare il <strong>Progetto Informatico</strong> (a più file) oppure un <strong>Singolo File</strong>.</p>
+              </div>
+            </label>
+
+            <label class="structure-option" data-mode="progetto">
+              <input type="radio" name="structure_mode" value="progetto">
+              <div class="structure-option-box">
+                <div class="opt-header">
+                  <span class="opt-icon">📁</span>
+                  <span class="opt-title">Progetto Informatico</span>
+                </div>
+                <p class="opt-desc">Architettura completa: <code>main.cpp</code>, <code>function.h</code>, <code>function.cpp</code>, <code>makefile</code>.</p>
+              </div>
+            </label>
+
+            <label class="structure-option" data-mode="singolo">
+              <input type="radio" name="structure_mode" value="singolo">
+              <div class="structure-option-box">
+                <div class="opt-header">
+                  <span class="opt-icon">📄</span>
+                  <span class="opt-title">Singolo File C++</span>
+                </div>
+                <p class="opt-desc">Tutto il codice in un unico file <code>main.cpp</code> (classe, prototipi, main e funzioni insieme).</p>
+              </div>
+            </label>
+          </div>
         </div>
 
         <!-- Parametri facoltativi e metadati -->
@@ -427,6 +470,9 @@
             <span class="badge badge-success" id="badge-compilation">
               ✓ Compilazione g++: 0 Errori, 0 Warning
             </span>
+            <span class="badge badge-structure" id="badge-structure">
+              📁 Progetto Informatico
+            </span>
             <span class="badge badge-info" id="badge-project-name">
               Cartella: <strong id="res-folder-name">progetto</strong>
             </span>
@@ -450,16 +496,25 @@
         </div>
       </div>
 
+      <!-- AI Reasoning Callout (spiegazione rilevamento intelligente struttura) -->
+      <div class="ai-reasoning-callout hidden" id="ai-reasoning-box">
+        <div class="reasoning-icon">🧠</div>
+        <div class="reasoning-text">
+          <strong>Rilevamento Struttura IA</strong>
+          <span id="ai-reasoning-desc"></span>
+        </div>
+      </div>
+
       <!-- TABS -->
       <div class="tabs-nav" id="tabs-nav">
-        <button class="tab-btn active" data-tab="tab-readme">README.md (Relazione)</button>
-        <button class="tab-btn" data-tab="tab-function-h">function.h</button>
-        <button class="tab-btn" data-tab="tab-function-cpp">function.cpp</button>
-        <button class="tab-btn" data-tab="tab-main-cpp">main.cpp</button>
-        <button class="tab-btn" data-tab="tab-makefile">makefile</button>
-        <button class="tab-btn" data-tab="tab-install-md">INSTALL.md</button>
-        <button class="tab-btn" data-tab="tab-terminal">Terminale & Test</button>
-        <button class="tab-btn" data-tab="tab-files">Tutti i File</button>
+        <button class="tab-btn active" data-tab="tab-readme" id="tab-nav-readme">README.md (Relazione)</button>
+        <button class="tab-btn" data-tab="tab-function-h" id="tab-nav-function-h">function.h</button>
+        <button class="tab-btn" data-tab="tab-function-cpp" id="tab-nav-function-cpp">function.cpp</button>
+        <button class="tab-btn" data-tab="tab-main-cpp" id="tab-nav-main-cpp">main.cpp</button>
+        <button class="tab-btn" data-tab="tab-makefile" id="tab-nav-makefile">makefile</button>
+        <button class="tab-btn" data-tab="tab-install-md" id="tab-nav-install-md">INSTALL.md</button>
+        <button class="tab-btn" data-tab="tab-terminal" id="tab-nav-terminal">Terminale & Test</button>
+        <button class="tab-btn" data-tab="tab-files" id="tab-nav-files">Tutti i File</button>
       </div>
 
       <!-- TAB CONTENT PANES -->

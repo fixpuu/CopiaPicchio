@@ -57,10 +57,11 @@ function ensureMakefileTabs(makefileContent) {
  */
 async function testProjectCompilation(projectData) {
   const hasGpp = await checkGppInstalled();
+  const isSingleFile = projectData.tipo_struttura === 'singolo_file' || (!projectData.function_h?.trim() && !projectData.function_cpp?.trim());
 
   // If running in serverless environment without g++ (e.g. Vercel)
   if (!hasGpp) {
-    console.log('[Compiler] Ambiente Serverless rilevato (g++ non presente nel container). Eseguo validazione statica e simulazione.');
+    console.log(`[Compiler] Ambiente Serverless rilevato (g++ non presente nel container). Eseguo validazione statica e simulazione (${isSingleFile ? 'Singolo File' : 'Progetto Modulare'}).`);
     
     // Validazione statica severa
     const errors = [];
@@ -75,8 +76,18 @@ async function testProjectCompilation(projectData) {
     if (allCode.includes('auto ')) {
       errors.push("Rilevato uso di 'auto'. Dichiarare i tipi esplicitamente.");
     }
-    if (!allCode.includes('srand((unsigned int)time(NULL))') && !allCode.includes('srand((unsigned int)time(0))')) {
+    if (!allCode.includes('srand((unsigned int)time(NULL))') && !allCode.includes('srand((unsigned int)time(0))') && !allCode.includes('srand((unsigned int)time(nullptr))')) {
       errors.push("Manca il cast obbligatorio in srand: 'srand((unsigned int)time(NULL));'.");
+    }
+
+    // Controllo classi didattiche 3B
+    if (allCode.includes('class ')) {
+      if (!allCode.includes('private:')) {
+        errors.push("Nelle classi C++ della 3B gli attributi devono essere dichiarati nella sezione 'private:'.");
+      }
+      if (!allCode.includes('public:')) {
+        errors.push("Nelle classi C++ della 3B i costruttori e metodi devono essere dichiarati nella sezione 'public:'.");
+      }
     }
 
     if (errors.length > 0) {
@@ -89,7 +100,9 @@ async function testProjectCompilation(projectData) {
     }
 
     const args = Array.isArray(projectData.sample_args) ? projectData.sample_args : [];
-    const simulatedLog = `g++ -Wall -Wconversion -c function.cpp\ng++ -Wall -Wconversion -c main.cpp\ng++ -Wall -Wconversion function.o main.o -o a.out\n[OK] 0 errori, 0 warning (Verifica Serverless)`;
+    const simulatedLog = isSingleFile
+      ? `g++ -Wall -Wconversion main.cpp -o a.out\n[OK] 0 errori, 0 warning (Verifica Serverless Singolo File)`
+      : `g++ -Wall -Wconversion -c function.cpp\ng++ -Wall -Wconversion -c main.cpp\ng++ -Wall -Wconversion function.o main.o -o a.out\n[OK] 0 errori, 0 warning (Verifica Serverless Progetto Modulare)`;
 
     // Output realistico
     let simOut = '';
@@ -110,14 +123,11 @@ async function testProjectCompilation(projectData) {
     };
   }
 
-  // Se g++ è presente (esecuzione in locale o server dedicato)
+  // Se g++ è presente (esecuzione reale in locale o server dedicato)
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'copiapicchio_'));
   
   try {
-    fs.writeFileSync(path.join(tmpDir, 'function.h'), formatCppWithTabs(projectData.function_h));
-    fs.writeFileSync(path.join(tmpDir, 'function.cpp'), formatCppWithTabs(projectData.function_cpp));
     fs.writeFileSync(path.join(tmpDir, 'main.cpp'), formatCppWithTabs(projectData.main_cpp));
-
     const makefile = ensureMakefileTabs(projectData.makefile || '');
     fs.writeFileSync(path.join(tmpDir, 'makefile'), makefile);
 
@@ -129,51 +139,81 @@ async function testProjectCompilation(projectData) {
       }
     }
 
-    // Step 1: Compile function.cpp
-    const res1 = await runCommand('g++ -Wall -Wconversion -c function.cpp', tmpDir);
-    if (res1.code !== 0 || res1.stderr.includes('warning:')) {
+    if (isSingleFile) {
+      // Compilazione su singolo file
+      const res = await runCommand('g++ -Wall -Wconversion main.cpp -o a.out', tmpDir);
+      if (res.code !== 0 || res.stderr.includes('warning:') || res.stderr.includes('error:')) {
+        return {
+          success: false,
+          phase: 'compilation_single',
+          output: res.stderr || res.stdout,
+          compilerLog: `g++ -Wall -Wconversion main.cpp -o a.out\n${res.stderr}`
+        };
+      }
+
+      // Esecuzione programma
+      const args = Array.isArray(projectData.sample_args) ? projectData.sample_args : [];
+      const stdinData = projectData.sample_stdin || '10\n';
+      const execRes = await runExecutable('./a.out', args, tmpDir, stdinData, 3000);
+
       return {
-        success: false,
-        phase: 'compilation_function',
-        output: res1.stderr || res1.stdout,
-        compilerLog: `g++ -Wall -Wconversion -c function.cpp\n${res1.stderr}`
+        success: true,
+        compilerLog: `g++ -Wall -Wconversion main.cpp -o a.out\n[OK] 0 errori, 0 warning (Compilazione Singolo File)`,
+        executionCommand: `./a.out ${args.join(' ')}`.trim(),
+        executionOutput: execRes.stdout + (execRes.stderr ? `\nSTDERR:\n${execRes.stderr}` : ''),
+        exitCode: execRes.code
+      };
+    } else {
+      // Compilazione modulare (function.h, function.cpp, main.cpp)
+      fs.writeFileSync(path.join(tmpDir, 'function.h'), formatCppWithTabs(projectData.function_h || ''));
+      fs.writeFileSync(path.join(tmpDir, 'function.cpp'), formatCppWithTabs(projectData.function_cpp || ''));
+
+      // Step 1: Compile function.cpp
+      const res1 = await runCommand('g++ -Wall -Wconversion -c function.cpp', tmpDir);
+      if (res1.code !== 0 || res1.stderr.includes('warning:')) {
+        return {
+          success: false,
+          phase: 'compilation_function',
+          output: res1.stderr || res1.stdout,
+          compilerLog: `g++ -Wall -Wconversion -c function.cpp\n${res1.stderr}`
+        };
+      }
+
+      // Step 2: Compile main.cpp
+      const res2 = await runCommand('g++ -Wall -Wconversion -c main.cpp', tmpDir);
+      if (res2.code !== 0 || res2.stderr.includes('warning:')) {
+        return {
+          success: false,
+          phase: 'compilation_main',
+          output: res2.stderr || res2.stdout,
+          compilerLog: `g++ -Wall -Wconversion -c main.cpp\n${res2.stderr}`
+        };
+      }
+
+      // Step 3: Link executable
+      const res3 = await runCommand('g++ -Wall -Wconversion function.o main.o -o a.out', tmpDir);
+      if (res3.code !== 0) {
+        return {
+          success: false,
+          phase: 'linking',
+          output: res3.stderr || res3.stdout,
+          compilerLog: `g++ -Wall -Wconversion function.o main.o -o a.out\n${res3.stderr}`
+        };
+      }
+
+      // Step 4: Execute program
+      const args = Array.isArray(projectData.sample_args) ? projectData.sample_args : [];
+      const stdinData = projectData.sample_stdin || '10\n';
+      const execRes = await runExecutable('./a.out', args, tmpDir, stdinData, 3000);
+
+      return {
+        success: true,
+        compilerLog: `g++ -Wall -Wconversion -c function.cpp\ng++ -Wall -Wconversion -c main.cpp\ng++ -Wall -Wconversion function.o main.o -o a.out\n[OK] 0 errori, 0 warning (Compilazione Modulare Progetto)`,
+        executionCommand: `./a.out ${args.join(' ')}`.trim(),
+        executionOutput: execRes.stdout + (execRes.stderr ? `\nSTDERR:\n${execRes.stderr}` : ''),
+        exitCode: execRes.code
       };
     }
-
-    // Step 2: Compile main.cpp
-    const res2 = await runCommand('g++ -Wall -Wconversion -c main.cpp', tmpDir);
-    if (res2.code !== 0 || res2.stderr.includes('warning:')) {
-      return {
-        success: false,
-        phase: 'compilation_main',
-        output: res2.stderr || res2.stdout,
-        compilerLog: `g++ -Wall -Wconversion -c main.cpp\n${res2.stderr}`
-      };
-    }
-
-    // Step 3: Link executable
-    const res3 = await runCommand('g++ -Wall -Wconversion function.o main.o -o a.out', tmpDir);
-    if (res3.code !== 0) {
-      return {
-        success: false,
-        phase: 'linking',
-        output: res3.stderr || res3.stdout,
-        compilerLog: `g++ -Wall -Wconversion function.o main.o -o a.out\n${res3.stderr}`
-      };
-    }
-
-    // Step 4: Execute program
-    const args = Array.isArray(projectData.sample_args) ? projectData.sample_args : [];
-    const stdinData = projectData.sample_stdin || '10\n';
-    const execRes = await runExecutable('./a.out', args, tmpDir, stdinData, 3000);
-
-    return {
-      success: true,
-      compilerLog: `g++ -Wall -Wconversion -c function.cpp\ng++ -Wall -Wconversion -c main.cpp\ng++ -Wall -Wconversion function.o main.o -o a.out\n[OK] 0 errori, 0 warning`,
-      executionCommand: `./a.out ${args.join(' ')}`.trim(),
-      executionOutput: execRes.stdout + (execRes.stderr ? `\nSTDERR:\n${execRes.stderr}` : ''),
-      exitCode: execRes.code
-    };
   } finally {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });

@@ -123,6 +123,23 @@ const btnViewRaw = document.getElementById('btn-view-raw');
 const btnCopyTabReadme = document.getElementById('btn-copy-tab-readme');
 const terminalBody = document.getElementById('terminal-body');
 const fileTreeList = document.getElementById('file-tree-list');
+const badgeStructure = document.getElementById('badge-structure');
+const aiReasoningBox = document.getElementById('ai-reasoning-box');
+const aiReasoningDesc = document.getElementById('ai-reasoning-desc');
+const tabNavReadme = document.getElementById('tab-nav-readme');
+const tabNavFunctionH = document.getElementById('tab-nav-function-h');
+const tabNavFunctionCpp = document.getElementById('tab-nav-function-cpp');
+const tabNavMainCpp = document.getElementById('tab-nav-main-cpp');
+
+// Setup selettore modalita struttura (auto / progetto / singolo)
+document.querySelectorAll('.structure-option').forEach(opt => {
+  opt.addEventListener('click', () => {
+    document.querySelectorAll('.structure-option').forEach(o => o.classList.remove('active'));
+    opt.classList.add('active');
+    const radio = opt.querySelector('input[type="radio"]');
+    if (radio) radio.checked = true;
+  });
+});
 
 // Initialize date field to today DD/MM/YYYY
 const today = new Date();
@@ -674,10 +691,12 @@ function renderCompitiList(compiti) {
 
   let html = '';
   for (const c of compiti) {
+    const isSingle = c.project?.tipo_struttura === 'singolo_file';
     html += `
       <div class="compito-card" id="card-${c.id}">
         <div class="compito-info">
           <div class="compito-meta">
+            <span class="badge ${isSingle ? 'badge-warning' : 'badge-structure'}">${isSingle ? '📄 Singolo File' : '📁 Progetto'}</span>
             <span class="badge badge-info">Cartella: ${escapeHtml(c.nome_progetto)}</span>
             <span class="badge badge-success">✓ 0 Errori</span>
             <span class="file-badge">📅 ${escapeHtml(c.formattedDate || '')}</span>
@@ -890,6 +909,10 @@ exerciseForm?.addEventListener('submit', async (e) => {
     if (fieldNomeProgetto.value.trim()) formData.append('nome_progetto', fieldNomeProgetto.value.trim());
     if (fieldArgomenti.value.trim()) formData.append('argomenti', fieldArgomenti.value.trim());
 
+    const structureModeInput = document.querySelector('input[name="structure_mode"]:checked');
+    const modalitaStruttura = structureModeInput ? structureModeInput.value : 'auto';
+    formData.append('modalita_struttura', modalitaStruttura);
+
     const curToken = sessionToken || localStorage.getItem('cp_session_token');
     if (curToken) formData.append('session_token', curToken);
 
@@ -974,6 +997,7 @@ function renderResults(data) {
   const { projectId, project, testResult } = data;
   currentProject = project;
   currentProjectId = projectId;
+  const isSingleFile = project.tipo_struttura === 'singolo_file' || (!project.function_h?.trim() && !project.function_cpp?.trim());
 
   try {
     localStorage.setItem('cp_last_project_view', JSON.stringify({
@@ -985,6 +1009,34 @@ function renderResults(data) {
 
   resProjectTitle.textContent = project.titolo || 'Esercizio Risolto';
   resFolderName.textContent = project.nome_progetto || 'progetto';
+
+  // Badge Struttura (Progetto vs File Singolo)
+  if (badgeStructure) {
+    if (isSingleFile) {
+      badgeStructure.textContent = '📄 Singolo File C++';
+      badgeStructure.className = 'badge badge-warning';
+    } else {
+      badgeStructure.textContent = '📁 Progetto Informatico';
+      badgeStructure.className = 'badge badge-structure';
+    }
+  }
+
+  // Spiegazione ragionamento IA struttura
+  if (aiReasoningBox && aiReasoningDesc) {
+    if (project.ragionamento_struttura && project.ragionamento_struttura.trim()) {
+      aiReasoningDesc.textContent = project.ragionamento_struttura;
+      aiReasoningBox.classList.remove('hidden');
+    } else {
+      aiReasoningBox.classList.add('hidden');
+    }
+  }
+
+  // Adatta tabs a seconda del tipo di struttura
+  if (tabNavFunctionH) tabNavFunctionH.style.display = isSingleFile ? 'none' : '';
+  if (tabNavFunctionCpp) tabNavFunctionCpp.style.display = isSingleFile ? 'none' : '';
+  if (tabNavMainCpp) {
+    tabNavMainCpp.textContent = isSingleFile ? 'main.cpp (File Unico)' : 'main.cpp';
+  }
 
   btnDownloadZip.href = `/api/download-zip/${projectId}`;
 
@@ -1015,15 +1067,18 @@ function renderResults(data) {
 }
 
 function renderTerminal(project, testResult) {
+  const isSingleFile = project.tipo_struttura === 'singolo_file' || (!project.function_h?.trim() && !project.function_cpp?.trim());
   let termHtml = '';
   termHtml += `<span class="term-prompt">studente@scuola:~/progetti/${project.nome_progetto}$</span> <span class="term-cmd">make clean</span>\n`;
-  termHtml += `rm -f *.o a.out\n\n`;
+  termHtml += isSingleFile ? `rm -f a.out\n\n` : `rm -f *.o a.out\n\n`;
 
   termHtml += `<span class="term-prompt">studente@scuola:~/progetti/${project.nome_progetto}$</span> <span class="term-cmd">make</span>\n`;
   if (testResult && testResult.compilerLog) {
     termHtml += `<span class="term-success">${escapeHtml(testResult.compilerLog)}</span>\n\n`;
   } else {
-    termHtml += `g++ -Wall -Wconversion -c function.cpp\ng++ -Wall -Wconversion -c main.cpp\ng++ -Wall -Wconversion function.o main.o -o a.out\n\n`;
+    termHtml += isSingleFile
+      ? `g++ -Wall -Wconversion main.cpp -o a.out\n\n`
+      : `g++ -Wall -Wconversion -c function.cpp\ng++ -Wall -Wconversion -c main.cpp\ng++ -Wall -Wconversion function.o main.o -o a.out\n\n`;
   }
 
   const runCmd = testResult?.executionCommand || 'make run';
@@ -1042,16 +1097,30 @@ function renderTerminal(project, testResult) {
 }
 
 function renderFileTree(project) {
-  const files = [
-    { name: 'main.cpp', desc: 'File sorgente principale (punto di ingresso e test)', size: 'C++' },
-    { name: 'function.h', desc: 'Header file (include guards, librerie standard, prototipi)', size: 'Header' },
-    { name: 'function.cpp', desc: 'Implementazione funzioni ausiliarie del progetto', size: 'C++' },
-    { name: 'makefile', desc: 'Automazione compilazione g++ -Wall -Wconversion con TAB', size: 'Build' },
-    { name: 'INSTALL.md', desc: 'Guida di compilazione, esecuzione e test atteso', size: 'Docs' },
-    { name: 'README.md', desc: 'Relazione completa strutturata per la consegna', size: 'Docs' },
-    { name: 'COPYING', desc: 'Licenza software GPL v3', size: 'Legal' },
-    { name: 'gpl-3.0.txt', desc: 'Testo integrale GNU General Public License v3', size: 'Legal' }
-  ];
+  const isSingleFile = project.tipo_struttura === 'singolo_file' || (!project.function_h?.trim() && !project.function_cpp?.trim());
+  let files = [];
+
+  if (isSingleFile) {
+    files = [
+      { name: 'main.cpp', desc: 'Sorgente C++ completo (definizione classe, funzioni e main)', size: 'C++' },
+      { name: 'makefile', desc: 'Automazione compilazione g++ -Wall -Wconversion con TAB', size: 'Build' },
+      { name: 'INSTALL.md', desc: 'Istruzioni operative compilazione su singolo file', size: 'Docs' },
+      { name: 'README.md', desc: 'Relazione didattica strutturata per la consegna', size: 'Docs' },
+      { name: 'COPYING', desc: 'Licenza software GPL v3', size: 'Legal' },
+      { name: 'gpl-3.0.txt', desc: 'Testo integrale GNU General Public License v3', size: 'Legal' }
+    ];
+  } else {
+    files = [
+      { name: 'main.cpp', desc: 'File sorgente principale (punto di ingresso e test)', size: 'C++' },
+      { name: 'function.h', desc: 'Header file (include guards, librerie standard, prototipi e classe)', size: 'Header' },
+      { name: 'function.cpp', desc: 'Implementazione metodi classe e funzioni ausiliarie', size: 'C++' },
+      { name: 'makefile', desc: 'Automazione compilazione g++ -Wall -Wconversion con TAB', size: 'Build' },
+      { name: 'INSTALL.md', desc: 'Guida di compilazione, esecuzione e test atteso', size: 'Docs' },
+      { name: 'README.md', desc: 'Relazione completa strutturata per la consegna', size: 'Docs' },
+      { name: 'COPYING', desc: 'Licenza software GPL v3', size: 'Legal' },
+      { name: 'gpl-3.0.txt', desc: 'Testo integrale GNU General Public License v3', size: 'Legal' }
+    ];
+  }
 
   if (Array.isArray(project.input_files)) {
     project.input_files.forEach(f => {

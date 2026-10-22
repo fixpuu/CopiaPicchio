@@ -674,6 +674,143 @@ body {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
+/* ================= STRUCTURE SELECTION MODE ================= */
+.structure-mode-card {
+  margin-bottom: 1.25rem;
+  background-color: rgba(30, 41, 59, 0.4);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.structure-options-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.structure-option {
+  cursor: pointer;
+  display: block;
+  margin: 0;
+}
+
+.structure-option input[type="radio"] {
+  display: none;
+}
+
+.structure-option-box {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.75rem 0.85rem;
+  height: 100%;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.structure-option:hover .structure-option-box {
+  border-color: rgba(59, 130, 246, 0.5);
+  background-color: rgba(30, 41, 59, 0.6);
+}
+
+.structure-option input[type="radio"]:checked + .structure-option-box,
+.structure-option.active .structure-option-box {
+  border-color: var(--primary);
+  background-color: rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.opt-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.35rem;
+}
+
+.opt-icon {
+  font-size: 1.15rem;
+}
+
+.opt-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+  flex: 1;
+}
+
+.opt-badge {
+  font-size: 0.65rem;
+  background-color: rgba(37, 99, 235, 0.25);
+  color: #60a5fa;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 600;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.opt-desc {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  line-height: 1.35;
+  margin: 0;
+}
+
+.opt-desc strong {
+  color: #e2e8f0;
+}
+
+.opt-desc code {
+  font-size: 0.72rem;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.1rem 0.25rem;
+  border-radius: 3px;
+  color: #93c5fd;
+}
+
+/* Callout Ragionamento Struttura IA */
+.ai-reasoning-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background-color: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.reasoning-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.reasoning-text {
+  font-size: 0.84rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+
+.reasoning-text strong {
+  color: #93c5fd;
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.badge-structure {
+  background-color: rgba(147, 51, 234, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+@media (max-width: 768px) {
+  .structure-options-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Accordion Details */
 .details-section {
   border: 1px solid var(--border-color);

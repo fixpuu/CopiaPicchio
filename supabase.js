@@ -78,27 +78,29 @@ function isUserAdmin(user) {
  * Risolve l'email reale partendo da username o email inserita
  */
 async function resolveEmail(emailOrUsername) {
-  const input = emailOrUsername.trim();
-  if (input.includes('@')) return input;
-
+  const input = (emailOrUsername || '').trim();
+  if (!input) return '';
   const lower = input.toLowerCase();
+  if (lower.includes('@')) return lower;
+
   if (lower === 'matty') return 'matty@copiapicchio.it';
   if (lower === 'zome') return 'zome@copiapicchio.it';
 
   if (supabase) {
     try {
-      const { data } = await supabase.auth.admin.listUsers();
+      const { data } = await supabase.auth.admin.listUsers({ perPage: 1000 });
       if (data?.users) {
         const found = data.users.find(u => {
-          const uName = (u.user_metadata?.username || u.email.split('@')[0] || '').toLowerCase();
-          return uName === lower || u.email.toLowerCase().startsWith(lower + '@');
+          const uName = (u.user_metadata?.username || u.email.split('@')[0] || '').toLowerCase().trim();
+          const uEmail = (u.email || '').toLowerCase().trim();
+          return uName === lower || uEmail === lower || uEmail.startsWith(`${lower}@`);
         });
-        if (found) return found.email;
+        if (found && found.email) return found.email.toLowerCase().trim();
       }
     } catch (_) {}
   }
 
-  return `${input}@scuola.it`;
+  return `${lower}@scuola.it`;
 }
 
 /**
@@ -109,12 +111,33 @@ async function loginWithSupabase(emailOrUsername, password) {
     throw new Error('SUPABASE_NOT_CONFIGURED');
   }
 
-  const email = await resolveEmail(emailOrUsername);
+  const clean = (emailOrUsername || '').trim();
+  let email = await resolveEmail(clean);
 
-  const { data, error } = await supabase.auth.signInWithPassword({
+  let { data, error } = await supabase.auth.signInWithPassword({
     email,
     password
   });
+
+  // Se fallisce e l'input era un username (senza @), tenta alternative comuni
+  if (error && !clean.includes('@')) {
+    const lower = clean.toLowerCase();
+    const candidateEmails = [`${lower}@copiapicchio.it`, `${lower}@scuola.it`];
+    for (const altEmail of candidateEmails) {
+      if (altEmail !== email) {
+        const altRes = await supabase.auth.signInWithPassword({
+          email: altEmail,
+          password
+        });
+        if (!altRes.error && altRes.data?.user) {
+          data = altRes.data;
+          error = null;
+          email = altEmail;
+          break;
+        }
+      }
+    }
+  }
 
   if (error) {
     throw new Error(error.message || 'Credenziali Supabase non valide');
@@ -488,24 +511,29 @@ async function verifyToken(token) {
 async function saveCompitoSupabase(compito) {
   if (!supabase) return null;
   try {
-    // 1. Salva singolo compito in compiti/<id>.json
+    // 1. Salva singolo compito in compiti/<id>.json per sicurezza
     await uploadStorageJson(`compiti/${compito.id}.json`, compito);
 
     // 2. Sincronizza lista completa compiti.json su cloud storage
     const cloudCompiti = await downloadStorageJson('compiti.json', []);
-    const idx = cloudCompiti.findIndex(c => c.id === compito.id);
-    if (idx >= 0) {
-      cloudCompiti[idx] = compito;
-    } else {
-      cloudCompiti.unshift(compito);
+    const mergedMap = new Map();
+    // Inserisci prima il nuovo compito (in cima)
+    if (compito && compito.id) mergedMap.set(compito.id, compito);
+    if (Array.isArray(cloudCompiti)) {
+      for (const c of cloudCompiti) {
+        if (c && c.id && !mergedMap.has(c.id)) {
+          mergedMap.set(c.id, c);
+        }
+      }
     }
-    await uploadStorageJson('compiti.json', cloudCompiti);
+    const finalCloudList = Array.from(mergedMap.values());
+    await uploadStorageJson('compiti.json', finalCloudList);
 
     // 3. Prova anche tabella SQL se configurata (opzionale)
     try {
       const record = {
         id: compito.id,
-        user_email: compito.user,
+        user_email: compito.user_email || compito.user,
         created_at: compito.createdAt,
         formatted_date: compito.formattedDate,
         nome_progetto: compito.nome_progetto,

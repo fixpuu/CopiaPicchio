@@ -52,18 +52,110 @@ cp -ai skel/ <nome_progetto>
 
 ---
 
-### Passo 2: Decomposizione della Consegna (Regola d'Oro del Docente)
-Non iniziare a scrivere codice monolitico. Leggi la consegna e scomponila in una serie numerata di passaggi logici:
-- Ogni requisito della consegna diventa una sezione `### <Titolo del requisito>` nel `README.md`.
-- Per ogni funzione richiesta:
-  1. `#### Prototipo` (in `function.h`)
-  2. `#### Implementazione` (in `function.cpp`)
-  3. `#### Utilizzo` (nel `main.cpp`)
-  4. `#### Test / La testo` (output reale da terminale seguito da `Funziona.`)
+### Passo 2: Analisi Intelligente della Consegna (Progetto Informatico vs Singolo File)
+Non iniziare a scrivere codice prima di aver compreso la struttura richiesta:
+1. **Rilevamento della Struttura**:
+   - **Progetto Informatico Completo** (multi-file: `main.cpp`, `function.h`, `function.cpp`, `makefile`, `INSTALL.md`, `README.md`):
+     Richiesto quando nella consegna c'è scritto "progetto", "progetto informatico", "creare un progetto", "cartella di progetto", "partire da skel", "makefile", "compilazione separata a moduli", oppure per consegne canoniche di laboratorio con repository git.
+   - **Singolo File C++** (`main.cpp` autocontenuto):
+     Richiesto quando nella consegna c'è scritto "un solo file", "singolo file", "in un unico file .cpp", "un file solo", "tutto in main.cpp", o per verifiche ed esercizi rapidi d'aula su file unico.
+2. **Decomposizione della Consegna (Regola d'Oro del Docente)**:
+   - Scomporre la consegna in passaggi logici numerati.
+   - Ogni requisito della consegna diventa una sezione `### <Titolo del requisito>` nel `README.md`.
+   - Per ogni classe o funzione richiesta:
+     1. `#### Prototipo / Dichiarazione`
+     2. `#### Implementazione`
+     3. `#### Utilizzo`
+     4. `#### Test / La testo` (output reale da terminale seguito da `Funziona.`)
 
 ---
 
-### Passo 3: Sviluppo del Codice C++ a 3 File
+### Passo 3: Le Classi in C++ (Programma Didattico Aggiornato)
+Il programma della classe 3B IT ha introdotto le **CLASSI** (`class`).
+Vanno implementate **ESATTAMENTE E SOLO NEL SEGUENTE STILE DIDATTICO DEL DOCENTE**:
+
+```cpp
+#include <iostream>
+#include <cstdlib>
+#include <ctime>
+#include <string>
+using namespace std;
+
+// 1. Prototipi funzioni ausiliarie helper
+int get_casuale(int da, int a);
+string get_nome(string domanda);
+string get_razza(string domanda);
+char get_genere(string domanda);
+
+// 2. Definizione della Classe
+class animale {
+	private:
+		string nome;
+		string razza;
+		int anno_nascita; 
+		char genere;
+	public:
+		animale() {
+			// Costruttore con inizializzazione campi tramite this-> obbligatorio
+			this->nome = get_nome("Dimmi il nome: ");
+			this->anno_nascita = get_casuale(2015, 2020);
+			this->razza = get_razza("Razza animale: ");
+			this->genere = get_genere("Genere animale: ");
+		}
+		void stampa();
+};
+
+// 3. Prototipi funzioni globali per array di oggetti
+void stampa(animale a[], int n);
+void riempi(animale a[], int n);
+
+// 4. Implementazione del metodo della classe FUORI dalla classe
+void animale::stampa() {
+	cout << "===== Animale =========" << endl;
+	cout << "  Nome: " << this->nome << endl;
+	cout << "  Nato: " << this->anno_nascita << endl;
+	cout << " Razza: " << this->razza << endl;
+	cout << "Genere: " << this->genere << endl;		
+}
+
+// 5. Funzione globale di stampa array
+void stampa(animale a[], int n) {
+	for(int i=0; i<n; i++) {
+		a[i].stampa();
+	}
+}
+
+// 6. main()
+int main() {
+	srand((unsigned int)time(NULL));
+	int n = 10;
+	animale a[n];
+	stampa(a, n);
+	return 0;
+}
+```
+
+#### Regole Cruciali sulle Classi:
+- **Attributi privati**: sempre nella sezione `private:` (string, int, char, double...).
+- **Metodi e costruttore pubblici**: sempre nella sezione `public:`.
+- **Costruttore di default**: inizializza gli attributi usando tassativamente `this->campo = ...;` chiamando helper `get_...()` o formule.
+- **Implementazione metodi fuori dalla classe**: `tipo NomeClasse::nome_metodo()`, e dentro si accede sempre con `this->campo`.
+- **Vettori di oggetti**: dichiarati come array statici (`NomeClasse a[n];`), e stampati con funzione globale ausiliaria `void stampa(NomeClasse a[], int n)` che invoca `a[i].stampa();`.
+- **Divieti OOP avanzati**: NO ereditarietà, NO template, NO virtual/polimorfismo, NO smart pointers.
+
+---
+
+### Passo 4: Sviluppo del Codice C++
+
+#### Nel caso di Progetto Informatico Completo (3 File):
+1. **`function.h`**: include guards, inclusioni standard, definizione classe `class NomeClasse { ... };`, prototipi funzioni helper e globali.
+2. **`function.cpp`**: `#include "function.h"`, implementazioni dei metodi `NomeClasse::metodo()` e funzioni ausiliarie.
+3. **`main.cpp`**: `#include "function.h"`, `main()` con test e array di oggetti.
+4. **`makefile`**: compilazione separata a moduli con TAB.
+
+#### Nel caso di Singolo File C++:
+1. **`main.cpp`**: contiene l'intero programma sorgente (inclusioni, prototipi helper, definizione classe, prototipi funzioni array, `main()`, implementazioni metodi e helper).
+2. **`makefile`**: compila direttamente `g++ -Wall -Wconversion main.cpp -o a.out`.
 
 #### File 1: `function.h`
 Deve contenere le inclusioni standard, `using namespace std;`, le guardie di inclusione e i prototipi:

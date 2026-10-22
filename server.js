@@ -171,18 +171,22 @@ function sanitizeProjectOutput(projectData, autore = 'Nome e Cognome') {
     .replace(/_+/g, '_')
     .replace(/^_+|_+$/g, '');
 
+  const isSingleFile = projectData.tipo_struttura === 'singolo_file' || (!projectData.function_h?.trim() && !projectData.function_cpp?.trim());
+
   return {
     ...projectData,
+    tipo_struttura: isSingleFile ? 'singolo_file' : (projectData.tipo_struttura || 'progetto_completo'),
+    ragionamento_struttura: clean(projectData.ragionamento_struttura || ''),
     nome_progetto: cleanName || 'progetto_informatica',
     titolo: clean(projectData.titolo),
     argomenti: clean(projectData.argomenti),
     consegna_trascritta: clean(projectData.consegna_trascritta),
-    main_cpp: formatCppWithTabs(clean(projectData.main_cpp)),
-    function_h: formatCppWithTabs(clean(projectData.function_h)),
-    function_cpp: formatCppWithTabs(clean(projectData.function_cpp)),
+    main_cpp: formatCppWithTabs(clean(projectData.main_cpp || '')),
+    function_h: isSingleFile ? '' : formatCppWithTabs(clean(projectData.function_h || '')),
+    function_cpp: isSingleFile ? '' : formatCppWithTabs(clean(projectData.function_cpp || '')),
     makefile: ensureMakefileTabs(clean(projectData.makefile || '')),
-    install_md: clean(projectData.install_md),
-    readme_md: clean(projectData.readme_md)
+    install_md: clean(projectData.install_md || ''),
+    readme_md: clean(projectData.readme_md || '')
   };
 }
 
@@ -234,6 +238,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   const cleanUser = username.trim();
+  const userLower = cleanUser.toLowerCase();
 
   // 1. Se Supabase è configurato, usa Supabase Auth
   if (supabaseModule.isConfigured()) {
@@ -244,7 +249,7 @@ app.post('/api/auth/login', async (req, res) => {
       const sessionData = {
         username: (userIdentifier || '').toLowerCase().trim(),
         originalUsername: userIdentifier,
-        email: user.email,
+        email: (user.email || '').toLowerCase().trim(),
         userId: user.id,
         isAdmin,
         loginTime: Date.now(),
@@ -264,6 +269,7 @@ app.post('/api/auth/login', async (req, res) => {
         signed: true,
         httpOnly: true,
         sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
         maxAge: 30 * 24 * 60 * 60 * 1000 // 30 giorni
       });
 
@@ -276,13 +282,50 @@ app.post('/api/auth/login', async (req, res) => {
         sessionToken
       });
     } catch (sbErr) {
-      console.warn('[Supabase Auth Error]:', sbErr.message);
+      console.warn('[Supabase Auth Warning]:', sbErr.message, '- controllo fallback credenziali locali...');
+      // Fallback: se Supabase fallisce ma le credenziali corrispondono agli account locali/admin
+      const expectedPassword = USERS[userLower];
+      if (expectedPassword && expectedPassword === password) {
+        console.log(`[Auth] Accesso di emergenza per admin ${userLower} riuscito.`);
+        const isAdmin = supabaseModule.isUserAdmin({ username: userLower });
+        const { credits } = await supabaseModule.getUserCredits({ username: userLower });
+
+        const sessionData = {
+          username: userLower,
+          originalUsername: userLower,
+          email: `${userLower}@copiapicchio.it`,
+          isAdmin,
+          loginTime: Date.now(),
+          exp: Date.now() + 30 * 24 * 60 * 60 * 1000
+        };
+
+        const sessionToken = createSignedToken(sessionData);
+        activeSessions.set(sessionToken, sessionData);
+        compitiManager.persistSessions(activeSessions);
+
+        res.cookie('cp_session', sessionToken, {
+          signed: true,
+          httpOnly: true,
+          sameSite: 'lax',
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 30 * 24 * 60 * 60 * 1000
+        });
+
+        return res.json({
+          success: true,
+          username: userLower,
+          email: `${userLower}@copiapicchio.it`,
+          credits,
+          isAdmin,
+          sessionToken
+        });
+      }
+
       return res.status(401).json({ error: `Login fallito: ${sbErr.message}` });
     }
   }
 
   // 2. Fallback locale se SUPABASE_URL non è impostato
-  const userLower = cleanUser.toLowerCase();
   const expectedPassword = USERS[userLower];
 
   if (expectedPassword && expectedPassword === password) {
@@ -292,6 +335,7 @@ app.post('/api/auth/login', async (req, res) => {
     const sessionData = {
       username: userLower,
       originalUsername: userLower,
+      email: `${userLower}@copiapicchio.it`,
       isAdmin,
       loginTime: Date.now(),
       exp: Date.now() + 30 * 24 * 60 * 60 * 1000
@@ -305,12 +349,14 @@ app.post('/api/auth/login', async (req, res) => {
       signed: true,
       httpOnly: true,
       sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
       maxAge: 30 * 24 * 60 * 60 * 1000
     });
 
     return res.json({
       success: true,
       username: userLower,
+      email: `${userLower}@copiapicchio.it`,
       credits,
       isAdmin,
       sessionToken,
@@ -586,8 +632,7 @@ app.get('/api/user/credits', requireAuth, async (req, res) => {
 // ================= API I MIEI COMPITI =================
 
 app.get('/api/compiti', requireAuth, async (req, res) => {
-  const username = req.user.username;
-  const list = await compitiManager.getCompitiByUser(username);
+  const list = await compitiManager.getCompitiByUser(req.user);
   res.json({ success: true, compiti: list });
 });
 
@@ -599,17 +644,25 @@ app.get('/api/compiti/:id', requireAuth, async (req, res) => {
 
   const reqUser = (req.user.username || '').toLowerCase().trim();
   const reqEmail = (req.user.email || '').toLowerCase().trim();
+  const reqId = (req.user.userId || req.user.id || '').trim();
   const cUser = (compito.user || '').toLowerCase().trim();
   const cEmail = (compito.user_email || '').toLowerCase().trim();
+  const cId = (compito.userId || '').trim();
 
-  if (!req.user.isAdmin && cUser !== reqUser && cEmail !== reqEmail && !cEmail.startsWith(`${reqUser}@`)) {
+  const isOwner = (reqId && cId && reqId === cId) ||
+                  (reqEmail && cEmail && reqEmail === cEmail) ||
+                  (reqUser && cUser && reqUser === cUser) ||
+                  (reqUser && cEmail && cEmail.startsWith(`${reqUser}@`)) ||
+                  (reqEmail && cUser && reqEmail.startsWith(`${cUser}@`));
+
+  if (!req.user.isAdmin && !isOwner) {
     return res.status(403).json({ error: 'Compito non trovato o accesso non autorizzato.' });
   }
   res.json({ success: true, compito });
 });
 
 app.delete('/api/compiti/:id', requireAuth, async (req, res) => {
-  const ok = await compitiManager.deleteCompito(req.params.id, req.user.username);
+  const ok = await compitiManager.deleteCompito(req.params.id, req.user);
   if (!ok && !req.user.isAdmin) {
     return res.status(404).json({ error: 'Compito non trovato o già eliminato.' });
   }
@@ -712,7 +765,7 @@ app.post('/api/admin/recharges/:id/reject', requireAdmin, async (req, res) => {
 
 app.post('/api/generate', upload.single('photo'), requireAuth, async (req, res) => {
   try {
-    const { consegna, autore, classe, data, nome_progetto, argomenti } = req.body || {};
+    const { consegna, autore, classe, data, nome_progetto, argomenti, modalita_struttura } = req.body || {};
     const photo = req.file;
 
     if (!consegna && !photo) {
@@ -728,7 +781,7 @@ app.post('/api/generate', upload.single('photo'), requireAuth, async (req, res) 
       });
     }
 
-    console.log(`[CopiaPicchio!] Nuova richiesta di generazione da utente: ${req.user.username} (Crediti: ${userCreditInfo.credits})`);
+    console.log(`[CopiaPicchio!] Nuova richiesta di generazione da utente: ${req.user.username} (Crediti: ${userCreditInfo.credits}, Modalità: ${modalita_struttura || 'auto'})`);
 
     let rawProject;
     try {
@@ -740,7 +793,8 @@ app.post('/api/generate', upload.single('photo'), requireAuth, async (req, res) 
         classe: classe || '3B IT',
         data: data || new Date().toLocaleDateString('it-IT'),
         nomeProgetto: nome_progetto || '',
-        argomenti: argomenti || ''
+        argomenti: argomenti || '',
+        modalitaStruttura: modalita_struttura || 'auto'
       });
     } catch (apiErr) {
       console.error('[Gemini API Error]', apiErr);
@@ -751,7 +805,7 @@ app.post('/api/generate', upload.single('photo'), requireAuth, async (req, res) 
     let project = sanitizeProjectOutput(rawProject, autore || 'Nome e Cognome');
 
     // 3. Verifica compilazione (in locale con g++ o serverless con validatore)
-    console.log('[CopiaPicchio!] Verifica compilazione C++...');
+    console.log(`[CopiaPicchio!] Verifica compilazione C++ (${project.tipo_struttura})...`);
     let testResult = await testProjectCompilation(project);
 
     // Se ci sono errori/warning, prova auto-guarigione con Gemini
@@ -869,9 +923,13 @@ app.get('/api/download-zip/:id', requireAuth, async (req, res) => {
   archive.pipe(res);
 
   // Inserisci file del progetto all'interno della cartella <nome_progetto>/
+  const isSingleFile = project.tipo_struttura === 'singolo_file' || (!project.function_h?.trim() && !project.function_cpp?.trim());
+
   archive.append(formatCppWithTabs(project.main_cpp || ''), { name: `${projectName}/main.cpp` });
-  archive.append(formatCppWithTabs(project.function_h || ''), { name: `${projectName}/function.h` });
-  archive.append(formatCppWithTabs(project.function_cpp || ''), { name: `${projectName}/function.cpp` });
+  if (!isSingleFile) {
+    archive.append(formatCppWithTabs(project.function_h || ''), { name: `${projectName}/function.h` });
+    archive.append(formatCppWithTabs(project.function_cpp || ''), { name: `${projectName}/function.cpp` });
+  }
   archive.append(ensureMakefileTabs(project.makefile || ''), { name: `${projectName}/makefile` });
   archive.append(project.install_md || '', { name: `${projectName}/INSTALL.md` });
   archive.append(project.readme_md || '', { name: `${projectName}/README.md` });

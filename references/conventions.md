@@ -4,31 +4,86 @@ Questo documento riassume le convenzioni, le regole didattiche e i requisiti for
 
 ---
 
-## 1. Struttura dei Progetti
+## 1. Struttura degli Esercizi: Progetto Informatico vs Singolo File
 
-Ogni esercizio è un progetto software autocontenuto posizionato nella directory:
-`/home/d.diemoz/git/papa_diemoz/progetti/<nome_progetto>/`
+Il sistema supporta due modalità strutturali in base alla consegna del compito:
 
-### Regole per il nome della directory del progetto
-- Tutto in minuscolo.
-- Parole separate da underscore (`_`).
-- Nessun carattere speciale o spazio.
-- Esempi: `ripasso_vettori`, `ordinamento`, `estrazioni`, `cifratura`, `exception`, `concetti`.
+### Modalità A: Progetto Informatico Completo (Multi-File)
+Richiesto per compiti formali di laboratorio, progetti strutturati o quando la consegna menziona "progetto", "skel", "makefile", "modulare".
+- Cartella di progetto dedicata: `/home/d.diemoz/git/papa_diemoz/progetti/<nome_progetto>/`
+- File obbligatori:
+  1. `main.cpp`: funzione `main()`, gestione parametri (`argc`, `argv`), test.
+  2. `function.h`: guards `#ifndef FUNCTION_H`, librerie standard, prototipi/classe.
+  3. `function.cpp`: implementazione metodi della classe e funzioni ausiliarie.
+  4. `makefile`: compilazione separata a moduli con TAB.
+  5. `INSTALL.md`: istruzioni di installazione e test.
+  6. `README.md` & `README.pdf`: relazione completa.
+  7. `COPYING` & `gpl-3.0.txt`: licenza GPL v3.
 
-### File obbligatori in ogni progetto
-1. `main.cpp`: contiene la funzione `main()`, la gestione dei parametri da linea di comando (`argc`, `argv`), l'interfaccia utente/chiamate di test.
-2. `function.h`: file header con include guards, inclusioni librerie standard, `using namespace std;` e prototipi di tutte le funzioni ausiliarie.
-3. `function.cpp`: implementazione di tutte le funzioni dichiarate in `function.h`.
-4. `makefile`: target `a.out`, `function.o`, `main.o`, `clean`, `run`, `doc`.
-5. `INSTALL.md`: istruzioni per compilazione manuale, make, esecuzione, output atteso, pulizia e generazione documentazione.
-6. `README.md`: relazione completa dell'esercizio strutturata secondo il modello scolastico.
-7. `README.pdf`: versione PDF compilata tramite pandoc (`make doc`).
-8. `COPYING`: file con richiamo alla licenza GPL v3.
-9. `gpl-3.0.txt`: testo completo della GNU GPL v3 (ereditato da `skel/`).
+### Modalità B: Singolo File C++
+Richiesto quando la consegna richiede "un solo file", "singolo file", "in un unico file .cpp", "un file solo", "tutto in main.cpp".
+- File sorgente unico: `main.cpp` contenente l'intero programma funzionante (inclusioni, prototipi helper, definizione classe con `private:` e `public:`, prototipi funzioni globali, `main()`, implementazione metodi `NomeClasse::metodo()` e funzioni helper).
+- `makefile`: per compilazione diretta `g++ -Wall -Wconversion main.cpp -o a.out`.
+- `INSTALL.md` & `README.md`: relazione adattata al formato su singolo file.
 
 ---
 
-## 2. Standard di Codifica C++
+## 2. Standard di Codifica C++ e Nuove Classi (Classe 3B IT)
+
+### Regole Tassative per le Classi (Programma Aggiornato)
+Le classi in C++ vanno implementate **ESATTAMENTE E SOLO NEL SEGUENTE STILE DIDATTICO**:
+
+```cpp
+// 1. Prototipi funzioni helper get_...
+int get_casuale(int da, int a);
+string get_nome(string domanda);
+string get_razza(string domanda);
+char get_genere(string domanda);
+
+// 2. Definizione Classe
+class animale {
+	private:
+		string nome;
+		string razza;
+		int anno_nascita; 
+		char genere;
+	public:
+		animale() {
+			// Costruttore di default: inizializzazione attributi con this-> obbligatorio
+			this->nome = get_nome("Dimmi il nome: ");
+			this->anno_nascita = get_casuale(2015, 2020);
+			this->razza = get_razza("Razza animale: ");
+			this->genere = get_genere("Genere animale: ");
+		}
+		void stampa();
+};
+
+// 3. Prototipi funzioni ausiliarie per array di oggetti
+void stampa(animale a[], int n);
+void riempi(animale a[], int n);
+
+// 4. Implementazione del metodo della classe FUORI dalla classe
+void animale::stampa() {
+	cout << "===== Animale =========" << endl;
+	cout << "  Nome: " << this->nome << endl;
+	cout << "  Nato: " << this->anno_nascita << endl;
+	cout << " Razza: " << this->razza << endl;
+	cout << "Genere: " << this->genere << endl;		
+}
+
+// 5. Funzione globale di stampa array
+void stampa(animale a[], int n) {
+	for(int i=0; i<n; i++) {
+		a[i].stampa();
+	}
+}
+```
+
+- **Attributi `private:`**: tutti i membri dati dell'oggetto.
+- **Metodi `public:`**: costruttore `NomeClasse()` e firme dei metodi.
+- **`this->` esplicito**: sia nel costruttore che dentro l'implementazione dei metodi fuori dalla classe (`void NomeClasse::stampa()`).
+- **Array di oggetti**: gestiti con array C standard (`animale a[n];`) e stampati con funzione globale `stampa(a, n)` che itera e invoca `a[i].stampa()`.
+- **Divieti rigorosi**: NO ereditarietà, NO template, NO virtual/polimorfismo, NO smart pointers, NO `<vector>` o `<algorithm>`.
 
 Il docente applica verifiche rigorose e compila con:
 ```bash

@@ -220,31 +220,36 @@ function getCompiti() {
 async function getCompitiAsync() {
   try {
     const cloudList = await supabaseModule.downloadStorageJson('compiti.json', null);
-    if (Array.isArray(cloudList) && cloudList.length > 0) {
-      const mergedMap = new Map();
-      for (const c of cloudList) {
-        if (c.id) mergedMap.set(c.id, c);
-      }
-      for (const c of memoryCompiti) {
-        if (c.id) mergedMap.set(c.id, c);
-      }
-      const diskList = readJson(COMPITI_FILE, []);
-      for (const c of diskList) {
-        if (c.id) mergedMap.set(c.id, c);
-      }
-      const merged = Array.from(mergedMap.values());
-      memoryCompiti = merged;
-      writeJson(COMPITI_FILE, merged);
-      return merged;
+    const mergedMap = new Map();
+
+    const diskList = readJson(COMPITI_FILE, []);
+    for (const c of diskList) {
+      if (c && c.id) mergedMap.set(c.id, c);
     }
+    for (const c of memoryCompiti) {
+      if (c && c.id) mergedMap.set(c.id, c);
+    }
+    if (Array.isArray(cloudList) && cloudList.length > 0) {
+      for (const c of cloudList) {
+        if (c && c.id) mergedMap.set(c.id, c);
+      }
+    }
+
+    const merged = Array.from(mergedMap.values());
+    memoryCompiti = merged;
+    writeJson(COMPITI_FILE, merged);
+    return merged;
   } catch (_) {}
   return getCompiti();
 }
 
 async function saveCompito(compito) {
-  // Normalizzazione utente in minuscolo per ricerca affidabile
+  // Normalizzazione dati utente per sincronizzazione affidabile cross-device
   if (compito.user) {
     compito.user = compito.user.toLowerCase().trim();
+  }
+  if (compito.user_email) {
+    compito.user_email = compito.user_email.toLowerCase().trim();
   }
 
   const compiti = getCompiti();
@@ -264,7 +269,7 @@ async function saveCompito(compito) {
 
   writeJson(COMPITI_FILE, compiti);
 
-  // Sincronizzazione immediata e attesa su Supabase Cloud Storage (essenziale su Lambda serverless per non bloccare l'upload prima del completamento)
+  // Sincronizzazione immediata e completa su Supabase Cloud Storage
   try {
     await supabaseModule.saveCompitoSupabase(compito);
   } catch (e) {
@@ -274,19 +279,47 @@ async function saveCompito(compito) {
   return compito;
 }
 
-async function getCompitiByUser(username) {
-  const clean = (username || '').toLowerCase().trim();
+async function getCompitiByUser(userParam) {
+  const username = (typeof userParam === 'string' ? userParam : userParam?.username || userParam?.originalUsername || '').toLowerCase().trim();
+  const email = (typeof userParam === 'object' ? (userParam?.email || userParam?.user_email) : '')?.toLowerCase().trim();
+  const userId = typeof userParam === 'object' ? (userParam?.userId || userParam?.id) : null;
+  const isAdmin = typeof userParam === 'object' ? !!userParam?.isAdmin : (username === 'matty' || username === 'zome');
+
   const compiti = await getCompitiAsync();
 
   return compiti
     .filter(c => {
+      if (isAdmin) return true; // Gli admin vedono tutti i compiti
+      // 1. Corrispondenza univoca per userId Supabase (infallibile cross-device)
+      if (userId && c.userId && String(c.userId).trim() === String(userId).trim()) {
+        return true;
+      }
       const cUser = (c.user || '').toLowerCase().trim();
       const cEmail = (c.user_email || '').toLowerCase().trim();
-      return cUser === clean || cEmail === clean || cEmail.startsWith(`${clean}@`);
+
+      // 2. Corrispondenza per email
+      if (email && cEmail && cEmail === email) {
+        return true;
+      }
+      // 3. Corrispondenza per username
+      if (username && cUser && cUser === username) {
+        return true;
+      }
+      // 4. Corrispondenza prefisso email / username
+      if (username && cEmail && (cEmail === username || cEmail.startsWith(`${username}@`))) {
+        return true;
+      }
+      if (email && cUser && (email === cUser || email.startsWith(`${cUser}@`))) {
+        return true;
+      }
+      return false;
     })
     .map(c => ({
       id: c.id,
       user: c.user,
+      user_email: c.user_email,
+      userId: c.userId,
+      tipo_struttura: c.project?.tipo_struttura || (c.project?.function_h?.trim() ? 'progetto_completo' : 'singolo_file'),
       createdAt: c.createdAt,
       formattedDate: c.formattedDate,
       nome_progetto: c.nome_progetto,
@@ -310,15 +343,23 @@ async function getCompitoById(id) {
   return found;
 }
 
-async function deleteCompito(id, username) {
-  const clean = (username || '').toLowerCase().trim();
+async function deleteCompito(id, userParam) {
+  const username = (typeof userParam === 'string' ? userParam : userParam?.username || '').toLowerCase().trim();
+  const email = (typeof userParam === 'object' ? userParam?.email : '')?.toLowerCase().trim();
+  const userId = typeof userParam === 'object' ? (userParam?.userId || userParam?.id) : null;
+  const isAdmin = typeof userParam === 'object' ? !!userParam?.isAdmin : (username === 'matty' || username === 'zome');
+
   const compiti = await getCompitiAsync();
 
   const filtered = compiti.filter(c => {
+    if (c.id !== id) return true;
+    if (isAdmin) return false; // Admin può eliminare qualsiasi compito
+
     const cUser = (c.user || '').toLowerCase().trim();
     const cEmail = (c.user_email || '').toLowerCase().trim();
-    const matchesUser = (cUser === clean || cEmail === clean || cEmail.startsWith(`${clean}@`));
-    return !(c.id === id && matchesUser);
+    const matchesUser = (userId && c.userId && String(c.userId).trim() === String(userId).trim()) ||
+                        (cUser === username || cEmail === email || cEmail.startsWith(`${username}@`));
+    return !matchesUser;
   });
 
   const wasDeleted = filtered.length !== compiti.length;
@@ -327,6 +368,10 @@ async function deleteCompito(id, username) {
     writeJson(COMPITI_FILE, filtered);
     try {
       await supabaseModule.uploadStorageJson('compiti.json', filtered);
+      const sb = supabaseModule.getSupabase();
+      if (sb) {
+        sb.storage.from('copiapicchio_data').remove([`compiti/${id}.json`]).catch(() => {});
+      }
     } catch (_) {}
   }
   return wasDeleted;
