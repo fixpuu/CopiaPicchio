@@ -325,7 +325,7 @@ Il docente insegna esclusivamente il C++ scolastico di base della classe 3B IT. 
         * function_h: "" (stringa vuota).
         * function_cpp: "" (stringa vuota).
         * makefile: makefile minimale ESATTAMENTE come in references/compito/makefile:
-          ```makefile
+          \`\`\`makefile
           # makefile
 
           a.out: main.cpp
@@ -336,7 +336,7 @@ Il docente insegna esclusivamente il C++ scolastico di base della classe 3B IT. 
 
           clean:
           	rm -rf a.out
-          ```
+          \`\`\`
         * install_md: "" (lasciare stringa vuota o minimale, nel compito da 10 è vuoto!).
 
    C) Se la consegna non lo specifica chiaramente ("non lo so" / testo generico) e non è forzato dall'utente:
