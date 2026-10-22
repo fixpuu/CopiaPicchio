@@ -76,8 +76,10 @@ async function testProjectCompilation(projectData) {
     if (allCode.includes('auto ')) {
       errors.push("Rilevato uso di 'auto'. Dichiarare i tipi esplicitamente.");
     }
-    if (!allCode.includes('srand((unsigned int)time(NULL))') && !allCode.includes('srand((unsigned int)time(0))') && !allCode.includes('srand((unsigned int)time(nullptr))')) {
-      errors.push("Manca il cast obbligatorio in srand: 'srand((unsigned int)time(NULL));'.");
+    if (allCode.includes('rand(') || allCode.includes('srand(')) {
+      if (!allCode.includes('srand((unsigned int)time(NULL))') && !allCode.includes('srand((unsigned int)time(0))') && !allCode.includes('srand((unsigned int)time(nullptr))')) {
+        errors.push("Manca il cast obbligatorio in srand: 'srand((unsigned int)time(NULL));'.");
+      }
     }
 
     // Controllo classi didattiche 3B

@@ -8,6 +8,9 @@ Questo documento riassume le convenzioni, le regole didattiche e i requisiti for
 
 Il sistema supporta due modalità strutturali in base alla consegna del compito:
 
+### Riconoscimento e Web Fetcher Automatico di Link Esterni
+Se la consegna fa riferimento a siti web, guide o dispense esterne (es. `https://zitogiuseppe.com/...`), il sistema estrae in automatico gli URL con regex, scarica il contenuto HTML via HTTP/HTTPS, pulisce la pagina preservando tabelle, testo e frammenti di codice C++, e inietta il materiale direttamente nel contesto dell'intelligenza artificiale per adempiere a tutte le specifiche della fonte.
+
 ### Modalità A: Progetto Informatico Completo (Multi-File)
 Richiesto per compiti formali di laboratorio, progetti strutturati o quando la consegna menziona "progetto", "skel", "makefile", "modulare".
 - Cartella di progetto dedicata: `/home/d.diemoz/git/papa_diemoz/progetti/<nome_progetto>/`
@@ -84,6 +87,27 @@ void stampa(animale a[], int n) {
 - **`this->` esplicito**: sia nel costruttore che dentro l'implementazione dei metodi fuori dalla classe (`void NomeClasse::stampa()`).
 - **Array di oggetti**: gestiti con array C standard (`animale a[n];`) e stampati con funzione globale `stampa(a, n)` che itera e invoca `a[i].stampa()`.
 - **Divieti rigorosi**: NO ereditarietà, NO template, NO virtual/polimorfismo, NO smart pointers, NO `<vector>` o `<algorithm>`.
+
+### Nuove Nozioni Lezione del 16/10/2026 (Inizializzatori, Inline, Puntatori ->, new/delete, .gitignore)
+Nella lezione del 16/10/2026 il programma didattico sulle classi è progredito introducendo:
+1. **Inizializzatori nei Costruttori**:
+   Uso della lista di inizializzatori dopo i `:` per inizializzare in modo efficiente i dati membro:
+   ```cpp
+   complesso(double r, double i) : reale(r), immaginario(i) {}
+   complesso() : reale(0.0), immaginario(0.0) {}
+   complesso(const complesso& z) : reale(z.reale), immaginario(z.immaginario) {}
+   ```
+2. **Metodi `inline`**:
+   Metodi concisi implementati direttamente nella definizione della classe per agevolare l'ottimizzazione del compilatore (es. operazioni algebriche, getter e metodi di stampa).
+3. **Puntatori a Istanze di Classe, `new`, `delete` e Operatore Freccia `->`**:
+   - Creazione dinamica sullo heap: `complesso *p = new complesso(1.0, 2.0);`
+   - Accesso a metodi e campi tramite freccia: `p->stampa();`
+   - Deallocazione esplicita per liberare memoria: `delete p;`
+4. **Ruolo del File `.gitignore`**:
+   - Prevenire il commit di file compilati ed eseguibili dipendenti dall'architettura (`a.out`, `*.o`, `*.exe`, `*~`, `.vscode/`).
+5. **Rigoroso Uso dell'Italiano per Classi, Metodi e Proprietà**:
+   - Quando si prendono esercizi da dispense o siti esterni (es. Giuseppe Zito):
+     Tradurre sempre tutto in italiano: `complesso`, `reale`, `immaginario`, `somma`, `sottrai`, `moltiplica`, `dividi`, `uguale`, `stampa`, `parte_reale`, `parte_immaginaria`.
 
 Il docente applica verifiche rigorose e compila con:
 ```bash

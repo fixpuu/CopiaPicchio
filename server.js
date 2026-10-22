@@ -934,6 +934,10 @@ app.get('/api/download-zip/:id', requireAuth, async (req, res) => {
   archive.append(project.install_md || '', { name: `${projectName}/INSTALL.md` });
   archive.append(project.readme_md || '', { name: `${projectName}/README.md` });
 
+  // Aggiungi .gitignore per escludere file oggetto ed eseguibili negli archivi git
+  const gitignoreContent = project.gitignore || "# Eseguibili compilati\na.out\n*.exe\n\n# Moduli compilazione separata\n*.o\n\n# File temporanei\n*~\n.vscode/\n.DS_Store\n";
+  archive.append(gitignoreContent, { name: `${projectName}/.gitignore` });
+
   // Aggiungi COPYING e gpl-3.0.txt da skel
   const copyingPath = path.join(__dirname, 'resources', 'skel', 'COPYING');
   const gplPath = path.join(__dirname, 'resources', 'skel', 'gpl-3.0.txt');

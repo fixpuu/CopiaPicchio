@@ -143,6 +143,27 @@ int main() {
 - **Vettori di oggetti**: dichiarati come array statici (`NomeClasse a[n];`), e stampati con funzione globale ausiliaria `void stampa(NomeClasse a[], int n)` che invoca `a[i].stampa();`.
 - **Divieti OOP avanzati**: NO ereditarietà, NO template, NO virtual/polimorfismo, NO smart pointers.
 
+#### Novità Didattiche Lezione del 16/10/2026:
+1. **Inizializzatori nei Costruttori**:
+   Uso della lista di inizializzatori per compattezza ed efficienza:
+   ```cpp
+   complesso(double r, double i) : reale(r), immaginario(i) {}
+   complesso() : reale(0.0), immaginario(0.0) {}
+   complesso(const complesso& z) : reale(z.reale), immaginario(z.immaginario) {}
+   ```
+2. **Metodi `inline`**:
+   Metodi sintetici definiti direttamente nella dichiarazione della classe.
+3. **Puntatori a Istanze di Classe, `->`, `new` e `delete`**:
+   - Creazione dinamica: `complesso *p = new complesso(3.0, 5.0);`
+   - Accesso con freccia: `p->stampa();`
+   - Deallocazione esplicita: `delete p;`
+4. **Ruolo del file `.gitignore`**:
+   - Escludere i file macchina/binari (`a.out`, `*.o`, `*.exe`, `*~`) dal repository git.
+5. **Rigoroso Uso dell'Italiano**:
+   - Tradurre sempre i termini di classi, metodi e proprietà in italiano didattico (`complesso`, `reale`, `immaginario`, `somma`, `sottrai`, `moltiplica`, `dividi`, `uguale`, `stampa`).
+6. **Web Fetcher di Riferimenti Esterni**:
+   - Se nella consegna sono presenti link a dispense o siti web (es. `https://zitogiuseppe.com/...`), il motore scarica ed estrae automaticamente il contenuto per comprendere l'esercizio citato.
+
 ---
 
 ### Passo 4: Sviluppo del Codice C++

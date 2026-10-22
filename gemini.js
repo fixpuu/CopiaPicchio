@@ -101,6 +101,81 @@ function makeGeminiRequest(model, contents, systemInstruction, responseSchema, t
   });
 }
 
+/**
+ * Estrae tutti gli URL HTTP / HTTPS presenti in una stringa di testo
+ */
+function extractUrlsFromText(text) {
+  if (!text || typeof text !== 'string') return [];
+  const matches = text.match(/https?:\/\/[^\s<>"')]+/gi);
+  if (!matches) return [];
+  return [...new Set(matches)];
+}
+
+/**
+ * Scarica automaticamente una pagina web citata nella consegna ed estrae testo e frammenti di codice
+ */
+async function fetchWebpageContent(url) {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 CopiaPicchio/1.0'
+      }
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      return `[Impossibile recuperare il sito ${url}: HTTP ${res.status}]`;
+    }
+
+    const html = await res.text();
+
+    // Pulizia codice superfluo
+    let text = html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+      .replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, '')
+      .replace(/<!--[\s\S]*?-->/g, '');
+
+    // Preserva blocchi pre e code
+    text = text.replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (match, p1) => {
+      const codeClean = p1.replace(/<[^>]+>/g, '');
+      return `\n\`\`\`cpp\n${codeClean.trim()}\n\`\`\`\n`;
+    });
+
+    // Tag di interruzione a newline
+    text = text.replace(/<(?:br|br\s*\/|\/p|\/div|\/li|\/tr|\/h[1-6])>/gi, '\n');
+    text = text.replace(/<[^>]+>/g, ' ');
+
+    // Decode entità HTML comuni
+    text = text
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&amp;/gi, '&')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'");
+
+    // Pulizia spazi e linee vuote
+    text = text
+      .split('\n')
+      .map(line => line.trimEnd())
+      .filter((line, idx, arr) => line.trim().length > 0 || (idx > 0 && arr[idx - 1].trim().length > 0))
+      .join('\n');
+
+    if (text.length > 25000) {
+      text = text.slice(0, 25000) + '\n... [Contenuto troncato per limite di lunghezza]';
+    }
+
+    return text;
+  } catch (err) {
+    return `[Errore durante il recupero del sito web ${url}: ${err.message}]`;
+  }
+}
+
 const SYSTEM_PROMPT = `
 Sei l'assistente ufficiale di "CopiaPicchio!", il sistema didattico per la risoluzione e generazione intelligente di compiti ed esercizi di informatica in C++ per studenti di 3ª superiore (classe 3B IT) del prof. Papa.
 
@@ -192,6 +267,39 @@ Il docente insegna esclusivamente il C++ scolastico di base della classe 3B IT. 
    - Vettori di oggetti: si dichiarano come array C statici (es. \`animale a[n];\`).
    - Per stampare un vettore di oggetti, si definisce una funzione globale ausiliaria \`void stampa(animale a[], int n)\` che cicla sugli elementi e chiama il metodo interno \`a[i].stampa();\`.
    - Niente costrutti OOP avanzati non visti: NO ereditarietà, NO polimorfismo, NO virtual, NO template.
+
+3.1. AGGIORNAMENTO LEZIONE DEL 16/10/2026 SULLE CLASSI (INIZIALIZZATORI, METODI INLINE, PUNTATORI, ->, NEW, DELETE, .GITIGNORE):
+   Nella lezione del 16/10/2026 sono stati introdotti nuovi concetti fondamentali sulle classi:
+   A) GLI INIZIALIZZATORI (Costruttore con initializer list):
+      Per facilitare e rendere compatto il codice, i costruttori possono inizializzare i campi tramite lista di inizializzatori dopo i due punti ':':
+      \`\`\`cpp
+      complesso(double r, double i) : reale(r), immaginario(i) {}
+      complesso() : reale(0.0), immaginario(0.0) {}
+      complesso(const complesso& z) : reale(z.reale), immaginario(z.immaginario) {}
+      \`\`\`
+   B) METODI INLINE:
+      I metodi brevi (come operazioni algebriche tra complessi, getter \`parte_reale()\`, \`parte_immaginaria()\`, stampa sintetica) possono essere definiti 'inline' direttamente nella classe.
+   C) ACCESSO ALLE ISTANZE DI CLASSE COME PUNTATORE E OPERATORE FRECCIA '->':
+      - Istanziamento dinamico con puntatori: \`complesso *p = new complesso(3.0, 5.0);\`.
+      - Accesso ai metodi tramite l'operatore freccia: \`p->stampa();\`.
+      - Deallocazione esplicita obbligatoria della memoria dinamica con \`delete p;\`.
+   D) RUOLO DEL FILE '.gitignore' NEGLI ARCHIVI GIT:
+      - Il file \`.gitignore\` elenca i file e percorsi generati dalla compilazione da escludere dal versionamento:
+        \`\`\`gitignore
+        a.out
+        *.o
+        *.exe
+        *~
+        .vscode/
+        .DS_Store
+        \`\`\`
+      - Spiega sempre il ruolo del file \`.gitignore\` nel README dell'esercizio.
+   E) RIGOROSO USO DELL'ITALIANO:
+      - Quando la consegna fa riferimento a fonti/siti in lingua inglese (es. Zito Giuseppe 'lez2c.html' con 'Complex', 'add', 'subtract', 'multiply', 'divide', 'compare', 'real', 'imag') O richiede espressamente l'italiano:
+        Tradurre TASSATIVAMENTE TUTTI i nomi di classi, metodi e proprietà in italiano scolastico:
+        * Nome classe: \`complesso\` (o \`complessi\`)
+        * Proprietà private: \`reale\`, \`immaginario\`
+        * Metodi: \`somma\`, \`sottrai\`, \`moltiplica\`, \`dividi\`, \`uguale\` (o \`confronta\`), \`parte_reale\`, \`parte_immaginaria\`, \`stampa\`.
 
 4. INTELLIGENZA ARCHITETTURALE: CAPIRE SE FARE "PROGETTO INFORMATICO" O "SINGOLO FILE":
    Devi essere intelligente e capire dal testo o dall'immagine della consegna quale struttura serve:
@@ -345,6 +453,9 @@ function formatComprehensiveReadme({ project, autore, classe, data, testResult }
 
   // Allegati
   md += `## Allegati\n\n`;
+  if (project.gitignore) {
+    md += `### .gitignore\n\`\`\`gitignore\n${project.gitignore}\n\`\`\`\n\n`;
+  }
   md += `### makefile\n\`\`\`makefile\n${project.makefile || ''}\n\`\`\`\n\n`;
   md += `### INSTALL.md\n\`\`\`markdown\n${project.install_md || ''}\n\`\`\`\n\n`;
   if (!isSingleFile) {
@@ -378,7 +489,12 @@ function formatComprehensiveReadme({ project, autore, classe, data, testResult }
   md += `   - Le classi adottano la corretta separazione tra \`private:\` e \`public:\`, costruttore con \`this->\` esplicito e implementazione dei metodi fuori dalla classe con risoluzione di visibilità (\`NomeClasse::metodo()\`).\n`;
   md += `   - Come da programma scolastico, sono stati utilizzati esclusivamente array classici (\`int v[n]\` o \`animale a[n]\`) e nessun container avanzato non svolto (\`<vector>\`, \`<algorithm>\`).\n`;
   md += `3. **Sicurezza delle operazioni I/O e gestione memoria**:\n`;
-  md += `   - Le letture/scritture su file sono protette con verifica preventiva \`is_open()\` per evitare accessi a file inesistenti o sovrascritture accidentali.\n\n`;
+  md += `   - Le letture/scritture su file sono protette con verifica preventiva \`is_open()\` per evitare accessi a file inesistenti o sovrascritture accidentali.\n`;
+  md += `4. **Novità della lezione del 16/10/2026 sulle classi**:\n`;
+  md += `   - **Inizializzatori nel costruttore**: sintassi compatta con lista di inizializzatori (\`: reale(r), immaginario(i)\`) per inizializzare direttamente i campi privati all'atto della creazione dell'oggetto.\n`;
+  md += `   - **Metodi inline**: implementazione compatta dei metodi all'interno della definizione della classe per massimizzare leggibilità ed efficienza di esecuzione.\n`;
+  md += `   - **Puntatori a istanze di classe e operatore freccia (\`->\`)**: allocazione dinamica tramite \`new\`, invocazione dei metodi con operatore freccia (\`ptr->metodo()\`) e deallocazione esplicita della memoria con \`delete ptr\` per evitare leak di memoria.\n`;
+  md += `   - **Ruolo di \`.gitignore\`**: inserimento del file \`.gitignore\` per escludere file binari ed eseguibili (\`a.out\`, \`*.o\`, \`*.exe\`) dall'archivio git scolastico.\n\n`;
 
   // Style tag pandoc
   md += `<style>\n:not(pre) > code {\n    color: #5310f0 !important; \n    background-color: #faf7f6ff !important;\n    border: 1px solid #dcdcdc !important;\n    border-radius: 6px !important;\n    padding: 0.2em 0.4em !important;\n    font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace !important;\n    font-size: 85% !important;\n}\n</style>\n`;
@@ -455,6 +571,26 @@ function createUniqueDiversityProfile() {
  */
 async function generateExercise({ consegna, imageBuffer, imageMime, autore, classe, data, nomeProgetto, argomenti, modalitaStruttura = 'auto' }) {
   const parts = [];
+
+  // Se la consegna contiene URL (es. link a lezioni, dispense o siti web), scarica e inietta automaticamente il loro contenuto
+  const detectedUrls = extractUrlsFromText(consegna);
+  if (detectedUrls.length > 0) {
+    console.log(`[CopiaPicchio WebFetcher] Trovati ${detectedUrls.length} link nella consegna. Download e parsing in corso...`);
+    const fetchedDocs = await Promise.allSettled(
+      detectedUrls.map(async (url) => {
+        const text = await fetchWebpageContent(url);
+        return { url, text };
+      })
+    );
+
+    for (const item of fetchedDocs) {
+      if (item.status === 'fulfilled' && item.value.text) {
+        parts.push({
+          text: `======================================================================\nCONTENUTO RECUPERATO DAL SITO WEB CITATO NELLA CONSEGNA (${item.value.url}):\n======================================================================\n${item.value.text}\n======================================================================`
+        });
+      }
+    }
+  }
 
   if (imageBuffer && imageMime) {
     parts.push({
@@ -548,6 +684,7 @@ Restituisci un JSON valido con questa struttura esatta:
   "function_cpp": "string (se progetto: implementazione metodi e funzioni; se singolo file: '')",
   "makefile": "string (codice makefile con tabulazioni '\\t')",
   "install_md": "string (contenuto completo per INSTALL.md)",
+  "gitignore": "string (regole di esclusione git: a.out, *.o, *.exe, *~, .vscode/)",
   "sample_stdin": "string (eventuale input da tastiera da passare a cin, es. 10\\n)",
   "sample_args": ["string (eventuali argomenti argv per ./a.out)"],
   "passaggi": [
@@ -579,6 +716,11 @@ Restituisci un JSON valido con questa struttura esatta:
     } else {
       result.tipo_struttura = 'singolo_file';
     }
+  }
+
+  // Normalizza gitignore
+  if (!result.gitignore || typeof result.gitignore !== 'string' || !result.gitignore.trim()) {
+    result.gitignore = "# Eseguibili compilati\na.out\n*.exe\n\n# Moduli compilazione separata\n*.o\n\n# File temporanei\n*~\n.vscode/\n.DS_Store\n";
   }
 
   // Costruisci la relazione completa, ricca e dettagliata
