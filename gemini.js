@@ -374,7 +374,7 @@ Il docente insegna esclusivamente il C++ scolastico di base della classe 3B IT. 
    - VIETATA la sezione "## Consegna" nel README: lo svolgimento parte subito dopo l'intestazione!
    - La relazione è la fedele CRONACA OPERATIVA dello studente al terminale della scuola (compito17@ltsp42:~$) che costruisce il programma passo per passo:
      1) Creare il progetto: mkdir <cartella>, cd <cartella>, touch README.md main.cpp ...
-     2) Creare il makefile con target a.out, run e clean + frase esatta: "Siccome ho riportato il contenuto del makefile a programma terminato, il target 'run' è già adattato alle esigenze del software..."
+     2) Creare il makefile con target a.out, run e clean: nello svolgimento va solo ciò che serve (sintesi dei target a.out, run, clean), mentre il codice completo del makefile va SEMPRE a fine documento sotto '## Allegati'.
      3) Se il programma usa parametri da linea di comando (argc/argv): "Testare il programma con output e stampa parametri passati"
      4) "Modificare il progetto creato":
         - Definizione classe o struttura -> "Compilo:" -> make -> "Nessun errore."
@@ -384,7 +384,9 @@ Il docente insegna esclusivamente il C++ scolastico di base della classe 3B IT. 
           "##### Implementazione"
           "##### Utilizzo"
           "##### La testo" (comando make run e output reale) -> "Funziona."
-     5) Se c'è una procedura ausiliaria di visualizzazione (come la stampa): nello svolgimento si scrive "Ho utilizzato la procedura stampa(), vedi allegati." e la si riporta nella sezione finale "## Allegati".
+     5) A FINE DOCUMENTO C'È SEMPRE LA SEZIONE "## Allegati" contenente:
+        - prima di tutto il "### makefile" completo (con la nota: "Siccome ho riportato il contenuto del makefile a programma terminato, il target 'run' è già adattato alle esigenze del software...")
+        - eventuali procedure ausiliarie (come la procedura di stampa: nello svolgimento si scrive "Ho utilizzato la procedura stampa(), vedi allegati." e la si riporta qui sotto "## Allegati") ed eventuali file di dati.
 
 8. DECOMPOSIZIONE NELL'ARRAY "passaggi":
    Ogni requisito o funzione DEVE avere un oggetto in "passaggi" con:
@@ -427,13 +429,16 @@ function formatComprehensiveReadme({ project, autore, classe, data }) {
     md += '```\n' + promptUser + ':~$ mkdir ' + projName + '\n' + promptUser + ':~$ cd ' + projName + '/\n' + promptUser + ':~/' + projName + '$ touch README.md main.cpp function.h function.cpp INSTALL.md makefile\n```\n\n';
   }
 
-  // 3. Creare un makefile con target a.out, run e clean
-  md += '### Creare un makefile con target `a.out, run e clean`\n\n';
-  md += '```makefile\n# makefile\n\n' + ensureMakefileTabs(project.makefile || '') + '\n```\n';
+  // 3. Creare un makefile con target a.out, run e clean (nella relazione solo quello che serve, codice completo a fine documento in allegati)
   const runArgsComment = Array.isArray(project.sample_args) && project.sample_args.length > 0
     ? ' (' + project.sample_args.join(' ') + ')'
     : '';
-  md += 'Siccome ho riportato il contenuto del makefile a programma terminato, il target `run` è già adattato alle esigenze del software' + runArgsComment + '.\n\n\n';
+  md += '### Creare un makefile con target `a.out, run e clean`\n\n';
+  md += 'Creo il makefile con i target necessari per la compilazione e l\'esecuzione:\n';
+  md += '- `a.out`: compila il sorgente con `g++ -Wall -Wconversion`\n';
+  md += '- `run`: esegue l\'eseguibile' + (runArgsComment ? ' passando i parametri necessari' + runArgsComment : '') + '\n';
+  md += '- `clean`: ripulisce i binari compilati\n\n';
+  md += 'Riporto il makefile completo a fine documento nella sezione `allegati`.\n\n';
 
   // 4. Testare il programma con output e stampa parametri passati (se il codice usa argc e argv)
   const codeUsesArgc = (project.main_cpp || '').includes('argc') && (project.main_cpp || '').includes('argv');
@@ -450,7 +455,7 @@ function formatComprehensiveReadme({ project, autore, classe, data }) {
     md += '\nBuon anno scolastico ' + className + '!\n```\n\n';
   }
 
-  // 5. Modificare il progetto creato
+  // 5. Modificare il progetto creato (nella relazione solo quello che serve!)
   md += '### Modificare il progetto creato\n\n';
 
   const passaggiPrincipali = [];
@@ -467,7 +472,7 @@ function formatComprehensiveReadme({ project, autore, classe, data }) {
     }
   }
 
-  // Se nessun passaggio principale è rimasto, mantieni tutto
+  // Se nessun passaggio principale è rimasto, mantieni tutto nello svolgimento
   if (passaggiPrincipali.length === 0 && passaggiAllegati.length > 0) {
     passaggiPrincipali.push(...passaggiAllegati.splice(0, passaggiAllegati.length));
   }
@@ -518,9 +523,17 @@ function formatComprehensiveReadme({ project, autore, classe, data }) {
     }
   }
 
-  // 6. Allegati (solo per funzioni ausiliarie come stampa)
+  // 6. ALLEGATI A FINE DOCUMENTO (SEMPRE PRESENTI CON MAKEFILE E PROCEDURE AUSILIARIE)
+  md += '## Allegati\n\n';
+
+  // 6.1 makefile sempre presente negli allegati a fine documento
+  const cleanMakefileContent = ensureMakefileTabs(project.makefile || '').replace(/^(#\s*makefile\s*\n+)+/i, '');
+  md += '### makefile\n\n';
+  md += '```makefile\n# makefile\n\n' + cleanMakefileContent + '\n```\n';
+  md += 'Siccome ho riportato il contenuto del makefile a programma terminato, il target `run` è già adattato alle esigenze del software' + runArgsComment + '.\n\n';
+
+  // 6.2 Procedure ausiliarie (come funzione stampa o altre)
   if (passaggiAllegati.length > 0) {
-    md += '## Allegati\n\n';
     for (const p of passaggiAllegati) {
       md += '### ' + p.titolo + '\n\n';
       if (p.prototipo) {
