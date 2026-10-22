@@ -324,8 +324,20 @@ Il docente insegna esclusivamente il C++ scolastico di base della classe 3B IT. 
         * main_cpp: CONTIENE TUTTO IL CODICE SORGENTE COMPLETO IN UN UNICO FILE (librerie standard, prototipi helper se presenti, definizione classe con private e public e metodi inline, main(), test con new/delete o istanze statiche).
         * function_h: "" (stringa vuota).
         * function_cpp: "" (stringa vuota).
-        * makefile: makefile minimale per singolo file (compila g++ -Wall -Wconversion main.cpp -o a.out, target run, clean, doc).
-        * install_md: istruzioni chiare per la compilazione diretta del singolo file con g++ e make.
+        * makefile: makefile minimale ESATTAMENTE come in references/compito/makefile:
+          ```makefile
+          # makefile
+
+          a.out: main.cpp
+          	g++ -Wall -Wconversion main.cpp
+
+          run: a.out
+          	./a.out [argomenti se presenti]
+
+          clean:
+          	rm -rf a.out
+          ```
+        * install_md: "" (lasciare stringa vuota o minimale, nel compito da 10 è vuoto!).
 
    C) Se la consegna non lo specifica chiaramente ("non lo so" / testo generico) e non è forzato dall'utente:
       - Analizza la richiesta: se è impostata come compito formale/laboratorio, adotta "progetto_completo"; se è una richiesta compatta di codice o esercizio rapido, adotta "singolo_file".
@@ -355,155 +367,177 @@ Il docente insegna esclusivamente il C++ scolastico di base della classe 3B IT. 
      * Helper casuali/input: get_casuale, estrai_casuale, genera_rnd, random_tra, estrai_int, get_nome, chiedi_nome, leggi_nome, get_razza, chiedi_razza, get_genere, acquisisci_genere...
      * Stampa e popolamento: stampa, visualizza, mostra, stampa_elenco, riempi, popola_elenco, carica_dati...
 
-7. DECOMPOSIZIONE PASSO-PASSO NELL'ARRAY "passaggi":
-   Devi scomporre la consegna in una lista dettagliata di passaggi ("passaggi").
-   Ogni requisito o funzione/metodo richiesto DEVE avere un elemento nell'array con:
-   - "titolo": nome del requisito (es. Definizione classe con attributi privati e costruttore)
-   - "spiegazione": spiegazione approfondita dell'obiettivo e del problema informatico
+7. MODELLO D'ORO ASSOLUTO DELLA RELAZIONE: LO STILE DEL COMPITO DA 10 (references/compito/README.md):
+   ATTENZIONE ASSOLUTA: La relazione DEVE basarsi AL 100% sullo stile, tono e vocabolario del compito reale di classe che ha preso 10 (references/compito/README.md)!
+   - VIETATE categoricamente sezioni teoriche finte come "Fonti", "Problemi riscontrati", "Istruzioni per compilare ed eseguire", "Motivazione architetturale".
+   - VIETATI tag HTML <style> o formattazioni artificiali.
+   - VIETATA la sezione "## Consegna" nel README: lo svolgimento parte subito dopo l'intestazione!
+   - La relazione è la fedele CRONACA OPERATIVA dello studente al terminale della scuola (compito17@ltsp42:~$) che costruisce il programma passo per passo:
+     1) Creare il progetto: mkdir <cartella>, cd <cartella>, touch README.md main.cpp ...
+     2) Creare il makefile con target a.out, run e clean + frase esatta: "Siccome ho riportato il contenuto del makefile a programma terminato, il target 'run' è già adattato alle esigenze del software..."
+     3) Se il programma usa parametri da linea di comando (argc/argv): "Testare il programma con output e stampa parametri passati"
+     4) "Modificare il progetto creato":
+        - Definizione classe o struttura -> "Compilo:" -> make -> "Nessun errore."
+        - Per ogni funzione/metodo richiesto:
+          "#### <Titolo del requisito>"
+          "##### Prototipo"
+          "##### Implementazione"
+          "##### Utilizzo"
+          "##### La testo" (comando make run e output reale) -> "Funziona."
+     5) Se c'è una procedura ausiliaria di visualizzazione (come la stampa): nello svolgimento si scrive "Ho utilizzato la procedura stampa(), vedi allegati." e la si riporta nella sezione finale "## Allegati".
+
+8. DECOMPOSIZIONE NELL'ARRAY "passaggi":
+   Ogni requisito o funzione DEVE avere un oggetto in "passaggi" con:
+   - "titolo": nome del requisito (es. Fare in modo che il programma gestisca la classe complesso, Creare una funzione che restituisce..., Creare il metodo somma()...)
+   - "spiegazione": frase breve e naturale da studente (es. "Creo la classe:", "Creo la funzione \`somma()\`:", "Controllo che i parametri siano corretti:")
    - "prototipo": codice del prototipo o dichiarazione della classe/metodo
-   - "prototipo_spiegazione": spiegazione della firma, visibilità private/public e parametri
-   - "implementazione": codice dell'implementazione (nel function.cpp per progetto, o nel main.cpp per singolo file)
-   - "implementazione_spiegazione": spiegazione riga per riga del codice
+   - "implementazione": codice dell'implementazione
    - "utilizzo_main": frammento di codice che richiama la funzione/oggetto nel main.cpp
-   - "test_output": output realistico mostrato a video
+   - "test_output": output realistico mostrato a video durante il test con 'make run'
+   - "is_allegato": boolean (true se è una procedura di supporto come 'stampa' da mettere in '## Allegati', false altrimenti)
 
 Restituisci ESCLUSIVAMENTE un JSON valido con i campi indicati.
 `;
 
-const { formatCppWithTabs } = require('./compiler');
+const { formatCppWithTabs, ensureMakefileTabs } = require('./compiler');
 
 /**
- * Format a comprehensive, rich, step-by-step README.md matching the student archive
+ * Format README.md matching 100% the style and structure of the reference assignment
+ * that received grade 10 (references/compito/README.md)
  */
-function formatComprehensiveReadme({ project, autore, classe, data, testResult }) {
-  const authorName = autore || 'Nome e Cognome';
-  const className = classe || '3B IT';
-  const docDate = data || new Date().toLocaleDateString('it-IT');
-  const projName = project.nome_progetto || 'progetto_informatica';
-  const title = project.titolo || `Esercizi di informatica del ${docDate}`;
-  const consegna = project.consegna_trascritta || project.consegna || '';
+function formatComprehensiveReadme({ project, autore, classe, data }) {
+  const authorName = autore || 'Daniel Diemoz';
+  const className = classe || '4bit';
+  const docDate = data || '13/10/2026';
+  const projName = project.nome_progetto || 'compito';
   const isSingleFile = project.tipo_struttura === 'singolo_file' || (!project.function_h?.trim() && !project.function_cpp?.trim());
+  const promptUser = 'compito17@ltsp42';
 
-  let md = `> Autore: ${authorName}  \n> Classe: ${className}  \n> Data: ${docDate}\n\n# ${title}\n\n`;
+  // 1. Intestazione esattamente come in compito/README.md
+  let md = '>' + authorName + '  \n' + className + '\n\n# Compito di informatica del ' + docDate + '\n\n## Svolgimento\n\n';
 
-  md += `## Consegna\n\n${consegna}\n\n`;
-
-  md += `## Svolgimento\n\n`;
-
+  // 2. Creare un progetto informatico con file necessari
   if (isSingleFile) {
-    md += `### Struttura su Singolo File Sorgente\n\nIn base ai requisiti dell'esercizio, l'intero programma è implementato in un unico file sorgente C++ (\`main.cpp\`).\n`;
-    if (project.ragionamento_struttura) {
-      md += `*Motivazione architetturale*: ${project.ragionamento_struttura}\n\n`;
-    } else {
-      md += `\n`;
-    }
-
-    md += `### Con relativo makefile\n\nRiporto il makefile per la compilazione con i flag di controllo del docente:\n\n\`\`\`makefile\n${project.makefile || ''}\n\`\`\`\n\n`;
-
-    md += `### Istruzioni per compilare ed eseguire\n\nIstruzioni operative per la compilazione manuale tramite \`g++\` con i flag \`-Wall -Wconversion\` e tramite \`make\`:\n\n\`\`\`\n# COMPILAZIONE\nPer compilare eseguire il seguente comando:\n\ng++ -Wall -Wconversion main.cpp -o a.out\n\nOppure, per automatizzare la compilazione:\n\nmake\n\n# ESECUZIONE\nPer eseguire il programma:\n\n./a.out\n\nOppure:\n\nmake run\n\`\`\`\n\n`;
+    md += '### Creare un progetto informatico con file necessari e un solo main.cpp\n\n';
+    md += 'Creo il nuovo progetto con i relativi file necessari:\n\n';
+    md += '```\n' + promptUser + ':~$ mkdir ' + projName + '\n' + promptUser + ':~$ cd ' + projName + '/\n' + promptUser + ':~/' + projName + '$ touch README.md main.cpp INSTALL.md makefile\n```\n\n';
   } else {
-    md += `### Creare un progetto\n\nParto dalla skel e creo il nuovo progetto \`${projName}\` con compilazione modulare a moduli separati:\n\n\`\`\`\nstudente@scuola:~/progetti$ cp -ai skel/ ${projName}\n\`\`\`\n\n`;
-    if (project.ragionamento_struttura) {
-      md += `*Motivazione architetturale*: ${project.ragionamento_struttura}\n\n`;
-    }
-
-    md += `### Con relativo makefile\n\nRiporto il contenuto iniziale del makefile per la compilazione separata dei moduli sorgente:\n\n\`\`\`makefile\n${project.makefile || ''}\n\`\`\`\n\n`;
-
-    md += `### Istruzioni per compilare ed eseguire\n\nIstruzioni operative per la compilazione manuale tramite \`g++\` con i flag \`-Wall -Wconversion\` e tramite \`make\`:\n\n\`\`\`\n# COMPILAZIONE\nPer compilare eseguire i seguenti comandi:\n\ng++ -Wall -Wconversion -c function.cpp\ng++ -Wall -Wconversion -c main.cpp\ng++ -Wall -Wconversion function.o main.o\n\nOppure, per automatizzare la compilazione:\n\nmake\n\n# ESECUZIONE\nPer eseguire il programma:\n\n./a.out\n\nOppure:\n\nmake run\n\`\`\`\n\n`;
+    md += '### Creare un progetto informatico con i relativi file necessari\n\n';
+    md += 'Creo il nuovo progetto con i file per la compilazione separata:\n\n';
+    md += '```\n' + promptUser + ':~$ mkdir ' + projName + '\n' + promptUser + ':~$ cd ' + projName + '/\n' + promptUser + ':~/' + projName + '$ touch README.md main.cpp function.h function.cpp INSTALL.md makefile\n```\n\n';
   }
 
-  // Step by step breakdown from passaggi array
-  if (Array.isArray(project.passaggi) && project.passaggi.length > 0) {
+  // 3. Creare un makefile con target a.out, run e clean
+  md += '### Creare un makefile con target `a.out, run e clean`\n\n';
+  md += '```makefile\n# makefile\n\n' + ensureMakefileTabs(project.makefile || '') + '\n```\n';
+  const runArgsComment = Array.isArray(project.sample_args) && project.sample_args.length > 0
+    ? ' (' + project.sample_args.join(' ') + ')'
+    : '';
+  md += 'Siccome ho riportato il contenuto del makefile a programma terminato, il target `run` è già adattato alle esigenze del software' + runArgsComment + '.\n\n\n';
+
+  // 4. Testare il programma con output e stampa parametri passati (se il codice usa argc e argv)
+  const codeUsesArgc = (project.main_cpp || '').includes('argc') && (project.main_cpp || '').includes('argv');
+  if (codeUsesArgc) {
+    const testArgs = project.sample_args?.length ? project.sample_args.join(' ') : 'a 1 4 6 hgfd ads';
+    const argList = testArgs.split(/\s+/).filter(Boolean);
+    md += '### Testare il programma con output e stampa parametri passati\n\n';
+    md += '```c++\nint main(int argc, char ** argv) {\n    cout << "===Parametri da linea di comando===" << endl;\n    cout << "N: " << argc << endl;\n    for (int i = 0; i < argc; i++) {\n        cout << "Parametro numero " << i+1 << ": "<< argv[i] << endl;\n    }\n\n    cout << "Buon anno scolastico ' + className + '!" << endl;\n\n    return 0;\n}\n```\n\n';
+    md += 'Compilo ed eseguo:\n\n';
+    md += '```bash\n' + promptUser + ':~/' + projName + '$ make\n' + (isSingleFile ? 'g++ -Wall -Wconversion main.cpp' : 'g++ -Wall -Wconversion -c function.cpp\ng++ -Wall -Wconversion -c main.cpp\ng++ -Wall -Wconversion function.o main.o') + '\n' + promptUser + ':~/' + projName + '$ ./a.out ' + testArgs + '\n===Parametri da linea di comando===\nN: ' + (argList.length + 1) + '\nParametro numero 1: ./a.out\n';
+    argList.forEach((arg, idx) => {
+      md += 'Parametro numero ' + (idx + 2) + ': ' + arg + '\n';
+    });
+    md += '\nBuon anno scolastico ' + className + '!\n```\n\n';
+  }
+
+  // 5. Modificare il progetto creato
+  md += '### Modificare il progetto creato\n\n';
+
+  const passaggiPrincipali = [];
+  const passaggiAllegati = [];
+
+  if (Array.isArray(project.passaggi)) {
     for (const p of project.passaggi) {
-      md += `### ${p.titolo}\n\n`;
-      if (p.spiegazione) {
-        md += `${p.spiegazione}\n\n`;
-      }
-
-      if (p.prototipo) {
-        const protoLocation = isSingleFile ? 'Nel sorgente (`main.cpp`)' : 'Nel `function.h`';
-        md += `#### Prototipo / Dichiarazione\n\n${protoLocation}:\n\n\`\`\`cpp\n${formatCppWithTabs(p.prototipo)}\n\`\`\`\n\n`;
-        if (p.prototipo_spiegazione) {
-          md += `${p.prototipo_spiegazione}\n\n`;
-        }
-      }
-
-      if (p.implementazione) {
-        const implLocation = isSingleFile ? 'Nel sorgente (`main.cpp`)' : 'Nel `function.cpp`';
-        md += `#### Implementazione\n\n${implLocation}:\n\n\`\`\`cpp\n${formatCppWithTabs(p.implementazione)}\n\`\`\`\n\n`;
-        if (p.implementazione_spiegazione) {
-          md += `Spiegazione del codice:\n${p.implementazione_spiegazione}\n\n`;
-        }
-      }
-
-      if (p.utilizzo_main) {
-        md += `#### Utilizzo\n\nNel \`main.cpp\`:\n\n\`\`\`cpp\n${formatCppWithTabs(p.utilizzo_main)}\n\`\`\`\n\n`;
-      }
-
-      if (p.test_output) {
-        md += `#### La testo\n\n\`\`\`\nstudente@scuola:~/progetti/${projName}$ make run\n${p.test_output}\n\`\`\`\n\nFunziona.\n\n`;
+      const isStampaAllegato = p.is_allegato || (/procedura.*stampa|funzione.*stampa|stampa\s+a\s+schermo/i.test(p.titolo) && project.passaggi.length > 2);
+      if (isStampaAllegato) {
+        passaggiAllegati.push(p);
+      } else {
+        passaggiPrincipali.push(p);
       }
     }
   }
 
-  // Final execution and test
-  const execLog = testResult?.executionOutput || 'Esecuzione completata con successo.';
-  if (isSingleFile) {
-    md += `### Test finale ed esecuzione completa\n\nEseguo la pulizia con \`make clean\`, ricompilo con \`make\` e testo l'eseguibile verificando anche il codice di uscita tramite \`echo $?\`:\n\n\`\`\`\nstudente@scuola:~/progetti/${projName}$ make clean\nrm -f a.out\nstudente@scuola:~/progetti/${projName}$ make\ng++ -Wall -Wconversion main.cpp -o a.out\nstudente@scuola:~/progetti/${projName}$ ./a.out\n${execLog}\nstudente@scuola:~/progetti/${projName}$ echo $?\n0\n\`\`\`\n\nIl programma funziona correttamente senza produrre alcun warning con i flag \`-Wall -Wconversion\`.\n\n`;
-  } else {
-    md += `### Test finale ed esecuzione completa\n\nEseguo la pulizia dei binari con \`make clean\`, ricompilo interamente con \`make\` e testo l'eseguibile verificando anche il codice di uscita tramite \`echo $?\`:\n\n\`\`\`\nstudente@scuola:~/progetti/${projName}$ make clean\nrm -f *.o a.out\nstudente@scuola:~/progetti/${projName}$ make\ng++ -Wall -Wconversion -c function.cpp\ng++ -Wall -Wconversion -c main.cpp\ng++ -Wall -Wconversion function.o main.o\nstudente@scuola:~/progetti/${projName}$ ./a.out\n${execLog}\nstudente@scuola:~/progetti/${projName}$ echo $?\n0\n\`\`\`\n\nIl programma funziona correttamente senza produrre alcun warning con i flag \`-Wall -Wconversion\`.\n\n`;
+  // Se nessun passaggio principale è rimasto, mantieni tutto
+  if (passaggiPrincipali.length === 0 && passaggiAllegati.length > 0) {
+    passaggiPrincipali.push(...passaggiAllegati.splice(0, passaggiAllegati.length));
   }
 
-  // Allegati
-  md += `## Allegati\n\n`;
-  if (project.gitignore) {
-    md += `### .gitignore\n\`\`\`gitignore\n${project.gitignore}\n\`\`\`\n\n`;
-  }
-  md += `### makefile\n\`\`\`makefile\n${project.makefile || ''}\n\`\`\`\n\n`;
-  md += `### INSTALL.md\n\`\`\`markdown\n${project.install_md || ''}\n\`\`\`\n\n`;
-  if (!isSingleFile) {
-    md += `### function.h\n\`\`\`cpp\n${project.function_h || ''}\n\`\`\`\n\n`;
-    md += `### function.cpp\n\`\`\`cpp\n${project.function_cpp || ''}\n\`\`\`\n\n`;
-  }
-  md += `### main.cpp${isSingleFile ? ' (Sorgente Completo)' : ''}\n\`\`\`cpp\n${project.main_cpp || ''}\n\`\`\`\n\n`;
+  for (const p of passaggiPrincipali) {
+    md += '#### ' + p.titolo + '\n\n';
 
-  if (Array.isArray(project.input_files)) {
+    if (p.spiegazione) {
+      md += p.spiegazione + '\n\n';
+    }
+
+    // Se è una definizione di classe o struct pura
+    const isClasseOStruct = /classe|struttura|struct/i.test(p.titolo) && p.prototipo && !p.implementazione;
+    if (isClasseOStruct) {
+      md += '```c++\n' + formatCppWithTabs(p.prototipo) + '\n```\n\n';
+      md += 'Compilo:\n\n```bash\n' + promptUser + ':~/' + projName + '$ make\n' + (isSingleFile ? 'g++ -Wall -Wconversion main.cpp' : 'g++ -Wall -Wconversion -c function.cpp') + '\n```\n\nNessun errore.\n\n';
+      continue;
+    }
+
+    if (p.prototipo) {
+      md += '##### Prototipo\n\n```c++\n' + formatCppWithTabs(p.prototipo) + '\n```\n\n';
+    }
+
+    if (p.implementazione) {
+      md += '##### Implementazione\n\n```c++\n' + formatCppWithTabs(p.implementazione) + '\n```\n\n';
+    }
+
+    if (p.utilizzo_main) {
+      md += '##### Utilizzo\n\n```c++\n' + formatCppWithTabs(p.utilizzo_main) + '\n```\n\n';
+    }
+
+    if (p.test_output) {
+      md += '##### La testo\n```bash\n' + promptUser + ':~/' + projName + '$ make run \n' + (isSingleFile ? 'g++ -Wall -Wconversion main.cpp\n./a.out' : 'g++ -Wall -Wconversion function.o main.o\n./a.out') + (runArgsComment ? ' ' + project.sample_args.join(' ') : '') + '\n' + p.test_output.trim() + '\n```\n';
+      if (passaggiAllegati.length > 0) {
+        md += 'Ho utilizzato la procedura `stampa()`, vedi `allegati`.\n\n';
+      } else {
+        md += 'Funziona.\n\n';
+      }
+    }
+  }
+
+  // Visualizzazione di file di dati creati (es. csv o txt)
+  if (Array.isArray(project.input_files) && project.input_files.length > 0) {
     for (const f of project.input_files) {
       if (f.filename && f.content) {
-        md += `### ${f.filename}\n\`\`\`\n${f.content}\n\`\`\`\n\n`;
+        md += 'Contenuto del file creato:\n\n```bash\n' + promptUser + ':~/' + projName + '$ more ' + f.filename + '\n' + f.content.trim() + '\n```\n\n';
       }
     }
   }
 
-  // Fonti
-  md += `## Fonti\n\n`;
-  md += `- Appunti delle lezioni e dispense del prof. Papa\n`;
-  md += `- Mappa didattica di informatica classe 3B IT\n`;
-  md += `- Documentazione C++ su cplusplus.com\n`;
-  md += `- W3Schools C++ Tutorial\n\n`;
-
-  // Problemi riscontrati
-  md += `## Problemi riscontrati\n\n`;
-  md += `Durante la risoluzione e lo sviluppo del codice sono stati curati con particolare attenzione i seguenti aspetti didattici:\n\n`;
-  md += `1. **Gestione dei warning con \`-Wall -Wconversion\`**:\n`;
-  md += `   - La funzione \`time(NULL)\` restituisce un tipo \`time_t\` (\`long int\`). Per evitare avvisi di troncamento passando il valore a \`srand()\`, è stato applicato il cast obbligatorio: \`srand((unsigned int)time(NULL));\`.\n`;
-  md += `   - Nelle divisioni numeriche tra interi con risultato decimale (come il calcolo della media aritmetica), per non perdere la parte frazionaria è stato forzato il cast esplicito a \`double\` sui fattori: \`(double)somma / (double)n\`.\n`;
-  md += `2. **Aderenza allo stile didattico delle Classi e Divieto di librerie avanzate**:\n`;
-  md += `   - Le classi adottano la corretta separazione tra \`private:\` e \`public:\`, costruttore con \`this->\` esplicito e implementazione dei metodi fuori dalla classe con risoluzione di visibilità (\`NomeClasse::metodo()\`).\n`;
-  md += `   - Come da programma scolastico, sono stati utilizzati esclusivamente array classici (\`int v[n]\` o \`animale a[n]\`) e nessun container avanzato non svolto (\`<vector>\`, \`<algorithm>\`).\n`;
-  md += `3. **Sicurezza delle operazioni I/O e gestione memoria**:\n`;
-  md += `   - Le letture/scritture su file sono protette con verifica preventiva \`is_open()\` per evitare accessi a file inesistenti o sovrascritture accidentali.\n`;
-  md += `4. **Novità della lezione del 16/10/2026 sulle classi**:\n`;
-  md += `   - **Inizializzatori nel costruttore**: sintassi compatta con lista di inizializzatori (\`: reale(r), immaginario(i)\`) per inizializzare direttamente i campi privati all'atto della creazione dell'oggetto.\n`;
-  md += `   - **Metodi inline**: implementazione compatta dei metodi all'interno della definizione della classe per massimizzare leggibilità ed efficienza di esecuzione.\n`;
-  md += `   - **Puntatori a istanze di classe e operatore freccia (\`->\`)**: allocazione dinamica tramite \`new\`, invocazione dei metodi con operatore freccia (\`ptr->metodo()\`) e deallocazione esplicita della memoria con \`delete ptr\` per evitare leak di memoria.\n`;
-  md += `   - **Ruolo di \`.gitignore\`**: inserimento del file \`.gitignore\` per escludere file binari ed eseguibili (\`a.out\`, \`*.o\`, \`*.exe\`) dall'archivio git scolastico.\n\n`;
-
-  // Style tag pandoc
-  md += `<style>\n:not(pre) > code {\n    color: #5310f0 !important; \n    background-color: #faf7f6ff !important;\n    border: 1px solid #dcdcdc !important;\n    border-radius: 6px !important;\n    padding: 0.2em 0.4em !important;\n    font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace !important;\n    font-size: 85% !important;\n}\n</style>\n`;
+  // 6. Allegati (solo per funzioni ausiliarie come stampa)
+  if (passaggiAllegati.length > 0) {
+    md += '## Allegati\n\n';
+    for (const p of passaggiAllegati) {
+      md += '### ' + p.titolo + '\n\n';
+      if (p.prototipo) {
+        md += '#### Prototipo\n\n```c++\n' + formatCppWithTabs(p.prototipo) + '\n```\n\n';
+      }
+      if (p.implementazione) {
+        md += '#### Implementazione\n\n```c++\n' + formatCppWithTabs(p.implementazione) + '\n```\n\n';
+      }
+      if (p.utilizzo_main) {
+        md += '#### Utilizzo\n\n```c++\n' + formatCppWithTabs(p.utilizzo_main) + '\n```\n\n';
+      }
+    }
+  }
 
   return md;
 }
+
 
 /**
  * Crea un profilo di diversificazione randomizzato per garantire che ogni compito,
@@ -721,6 +755,14 @@ Restituisci un JSON valido con questa struttura esatta:
       result.tipo_struttura = 'progetto_completo';
     } else {
       result.tipo_struttura = 'singolo_file';
+    }
+  }
+
+  // Normalizza makefile per singolo file identico a references/compito/makefile
+  if (result.tipo_struttura === 'singolo_file') {
+    const runArgs = Array.isArray(result.sample_args) && result.sample_args.length > 0 ? ` ${result.sample_args.join(' ')}` : '';
+    if (!result.makefile || result.makefile.includes('all:') || result.makefile.includes('doc:') || !result.makefile.includes('a.out: main.cpp')) {
+      result.makefile = `# makefile\n\na.out: main.cpp\n\tg++ -Wall -Wconversion main.cpp\n\nrun: a.out \n\t./a.out${runArgs}\n\nclean: \n\trm -rf a.out\n`;
     }
   }
 

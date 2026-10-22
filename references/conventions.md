@@ -31,7 +31,96 @@ Richiesto quando la consegna richiede "un solo file", "singolo file", "in un uni
 
 ---
 
-## 2. Standard di Codifica C++ e Nuove Classi (Classe 3B IT)
+## 3. Standard d'Oro della Relazione (Il Compito da 10 in references/compito/)
+
+La relazione (`README.md`) deve seguire **AL 100%** lo stile, il tono e la struttura del compito reale di classe che ha ottenuto la votazione massima di **10** (presente in `references/compito/README.md`):
+
+### Struttura Obbligatoria del README.md:
+1. **Intestazione minima**:
+   ```markdown
+   >Nome Cognome  
+   4bit
+
+   # Compito di informatica del DD/MM/YYYY
+
+   ## Svolgimento
+   ```
+   *Niente sezioni "Consegna", niente caselle o etichette artificiali.*
+
+2. **Creazione Progetto**:
+   ```markdown
+   ### Creare un progetto informatico con file necessari e un solo main.cpp
+
+   Creo il nuovo progetto con i relativi file necessari:
+
+   ```
+   compito17@ltsp42:~$ mkdir <nome_progetto>
+   compito17@ltsp42:~$ cd <nome_progetto>/
+   compito17@ltsp42:~/<nome_progetto>$ touch README.md main.cpp INSTALL.md makefile
+   ```
+   ```
+
+3. **Creazione del makefile**:
+   ```markdown
+   ### Creare un makefile con target `a.out, run e clean`
+
+   ```makefile
+   # makefile
+
+   a.out: main.cpp
+   	g++ -Wall -Wconversion main.cpp
+
+   run: a.out 
+   	./a.out <parametri se necessari>
+
+   clean: 
+   	rm -rf a.out
+   ```
+   Siccome ho riportato il contenuto del makefile a programma terminato, il target `run` è già adattato alle esigenze del software (<spiegazione parametri>).
+   ```
+
+4. **Test preliminare dei parametri (se usa argc/argv)**:
+   ```markdown
+   ### Testare il programma con output e stampa parametri passati
+   ```
+
+5. **Svolgimento incrementale**:
+   ```markdown
+   ### Modificare il progetto creato
+
+   #### Fare in modo che il programma gestisca la classe/struttura ...
+   Creo la classe:
+   ...
+   Compilo:
+   ...
+   Nessun errore.
+
+   #### Creare il metodo/funzione ...
+   ##### Prototipo
+   ##### Implementazione
+   ##### Utilizzo
+   ##### La testo
+   ...
+   Funziona.
+   ```
+
+6. **Allegati**:
+   Solo per eventuali procedure ausiliarie (come la stampa a video):
+   ```markdown
+   ## Allegati
+
+   ### Funzione stampa
+   #### Prototipo
+   #### Implementazione
+   #### Utilizzo
+   ```
+
+### Divieti Assoluti:
+- **NO** sezione `## Fonti`
+- **NO** sezione `## Problemi riscontrati`
+- **NO** tag HTML `<style>` o colori CSS artificiali
+- **NO** preamboli accademici generati dall'AI ("In base ai requisiti dell'esercizio...")
+- **NO** `INSTALL.md` duplicato nel README (il file `INSTALL.md` è vuoto o minimale).
 
 ### Regole Tassative per le Classi (Programma Aggiornato)
 Le classi in C++ vanno implementate **ESATTAMENTE E SOLO NEL SEGUENTE STILE DIDATTICO**:
