@@ -11,9 +11,11 @@ if (!GEMINI_API_KEY) {
 }
 
 const MODELS = [
+  'gemini-3.5-flash-lite',
   'gemini-3.1-flash-lite',
-  'gemini-3.1-flash-lite-preview',
-  'gemini-2.5-flash-lite'
+  'gemini-flash-lite-latest',
+  'gemini-3.5-flash',
+  'gemini-flash-latest'
 ];
 
 /**
@@ -316,9 +318,10 @@ Il docente insegna esclusivamente il C++ scolastico di base della classe 3B IT. 
 
    B) "singolo_file" (Unico file C++ autocontenuto):
       - Si usa quando nella consegna c'è scritto: "un file solo", "un solo file", "singolo file", "in un unico file .cpp", "un file unico", "scrivere un file cpp", "tutto in main.cpp", "non usare makefile/moduli separati".
-      - Oppure quando si tratta di un esercizio rapido/verifica d'aula da svolgere in un unico file sorgente senza architettura a più file.
+      - Si usa quando l'esercizio richiede metodi INLINE e costruttori con inizializzatori (come nel Programma 3 del sito di Zito Giuseppe): i metodi inline sono definiti direttamente dentro la classe, rendendo inutile un file function.cpp separato!
+      - Si usa quando la consegna è introdotta come "esercizi per lezione successiva", "compito per casa", esercizio rapido o verifica d'aula senza esplicita richiesta di "progetto/cartella skel".
       - Struttura generata:
-        * main_cpp: CONTIENE TUTTO IL CODICE SORGENTE COMPLETO IN UN UNICO FILE (librerie standard, prototipi helper, definizione classe con private e public, prototipi funzioni array, main(), implementazione metodi con NomeClasse::metodo(), implementazione funzioni helper).
+        * main_cpp: CONTIENE TUTTO IL CODICE SORGENTE COMPLETO IN UN UNICO FILE (librerie standard, prototipi helper se presenti, definizione classe con private e public e metodi inline, main(), test con new/delete o istanze statiche).
         * function_h: "" (stringa vuota).
         * function_cpp: "" (stringa vuota).
         * makefile: makefile minimale per singolo file (compila g++ -Wall -Wconversion main.cpp -o a.out, target run, clean, doc).
@@ -639,9 +642,12 @@ ATTENZIONE: TUTTI i requisiti didattici rimangono rigorosamente validi:
   } else {
     strutturaDirettiva = `PREFERENZA STRUTTURA: RILEVAMENTO AUTOMATICO INTELLIGENTE DALLA CONSEGNA!
 Analizza con estrema attenzione il testo e l'eventuale foto della consegna:
-- Se nella consegna c'è scritto di fare un "progetto informatico", "creare un progetto", "progetto", "partire da skel", "makefile", "compilazione separata/modulare" o se è chiaramente una consegna canonica di laboratorio per la cartella di progetto, scegli "tipo_struttura": "progetto_completo".
-- Se nella consegna c'è scritto "un solo file", "singolo file", "in un unico file .cpp", "un file solo", "scrivere un file cpp", "tutto in main.cpp", o se è un esercizio/verifica rapida da svolgere su file unico senza moduli, scegli "tipo_struttura": "singolo_file".
-- Se non è specificato ("o non lo so" / testo ambiguo), valuta il contesto: se sembra un tipico compito completo di laboratorio imposta "progetto_completo", se sembra un esercizio circoscritto imposta "singolo_file".
+- Scegli "tipo_struttura": "progetto_completo" se la consegna richiede espressamente un "progetto informatico", "creare un progetto", "cartella di progetto", "partire da skel", "makefile", "compilazione separata/modulare a 3 file", o se è un'esercitazione formale di laboratorio a moduli.
+- Scegli "tipo_struttura": "singolo_file" se:
+  1) Nella consegna c'è scritto "un solo file", "singolo file", "in un unico file .cpp", "un file solo", "tutto in main.cpp".
+  2) Oppure l'esercizio riguarda classi con METODI INLINE e INIZIALIZZATORI (es. l'esercizio 3 del sito di Zito Giuseppe su lez2c.html): con i metodi inline l'implementazione è tutta dentro la classe nello stesso file, per cui un file function.cpp separato sarebbe inutile o ridondante!
+  3) Oppure è formulato come "Esercizi per lezione successiva", compito a casa rapido o esercizio circoscritto.
+- Se non è specificato ("o non lo so" / testo ambiguo), valuta il contesto didattico: se richiede metodi inline o se la fonte di riferimento usa un file unico, adotta "singolo_file"; altrimenti valuta se serve "progetto_completo".
 Spiega chiaramente la tua motivazione nel campo "ragionamento_struttura".`;
   }
 
